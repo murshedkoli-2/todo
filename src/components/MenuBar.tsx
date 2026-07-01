@@ -3,6 +3,7 @@
 import { useCallback, useRef } from "react";
 import { DisplayStatus } from "@/lib/types";
 import AuthButton from "@/components/AuthButton";
+import ThemeToggle from "@/components/ThemeToggle";
 
 import Image from "next/image";
 
@@ -101,6 +102,9 @@ export default function MenuBar({
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Theme toggle */}
+          <ThemeToggle />
 
           {/* Auth */}
           <AuthButton />
