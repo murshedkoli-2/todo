@@ -32,7 +32,7 @@ export async function GET() {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await dbConnect();
-    const todos = await Todo.find({}).sort({ createdAt: -1 }).lean();
+    const todos = await Todo.find({ userId: session.user.id }).sort({ createdAt: -1 }).lean();
 
     const result = todos.map((t) => ({
       _id:             t._id.toString(),

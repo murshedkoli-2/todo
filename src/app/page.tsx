@@ -7,10 +7,10 @@ import Todo from "@/models/Todo";
 import { Todo as TodoType, PaymentStatus } from "@/lib/types";
 import HomeClient from "@/components/HomeClient";
 
-async function getAllTodos(): Promise<TodoType[]> {
+async function getAllTodos(userId: string): Promise<TodoType[]> {
   try {
     await dbConnect();
-    const rawTodos = await Todo.find({}).sort({ createdAt: -1 }).lean();
+    const rawTodos = await Todo.find({ userId }).sort({ createdAt: -1 }).lean();
 
     return rawTodos.map((t) => ({
       _id:             t._id.toString(),
@@ -40,7 +40,7 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const todos = await getAllTodos();
+  const todos = await getAllTodos(session.user.id);
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -1,10 +1,13 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import dbConnect from "@/lib/dbConnect";
+import User from "@/models/User";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
-    maxAge: 365 * 24 * 60 * 60, // 365 days (keep logged in)
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: "/login",
@@ -12,27 +15,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     CredentialsProvider({
-      name: "PIN",
+      name: "credentials",
       credentials: {
-        pin: { label: "PIN", type: "password" },
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const expectedPin = process.env.AUTH_PIN || "2580";
-        const inputPin = credentials?.pin as string;
-
-        if (!inputPin) {
-          throw new Error("PIN is required");
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Email and password are required");
         }
 
-        if (inputPin !== expectedPin) {
-          throw new Error("Invalid PIN");
+        await dbConnect();
+        const email = (credentials.email as string).toLowerCase().trim();
+        const password = credentials.password as string;
+
+        const user = await User.findOne({ email });
+        if (!user) {
+          throw new Error("No user found with this email");
         }
 
-        // Return a default admin/user session
+        if (!user.emailVerified) {
+          throw new Error("Please verify your email before logging in");
+        }
+
+        const isPasswordMatch = await bcrypt.compare(password, user.password!);
+        if (!isPasswordMatch) {
+          throw new Error("Incorrect password");
+        }
+
         return {
-          id: "admin",
-          name: "Admin",
-          email: "admin@example.com",
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
         };
       },
     }),
@@ -41,12 +55,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
       }
       return token;
     },
     async session({ session, token }) {
       if (token?.id) {
         session.user.id = token.id as string;
+      }
+      if (token?.email) {
+        session.user.email = token.email as string;
+      }
+      if (token?.name) {
+        session.user.name = token.name as string;
       }
       return session;
     },

@@ -48,7 +48,7 @@ export default async function EditTaskPage({ params }: Props) {
   if (!session?.user?.id) redirect("/login");
 
   const todo = await getTodo(params.id);
-  if (!todo) notFound();
+  if (!todo || todo.userId !== session.user.id) notFound();
 
   return <TaskForm todo={todo} />;
 }

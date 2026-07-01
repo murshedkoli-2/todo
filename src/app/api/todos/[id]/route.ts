@@ -45,7 +45,7 @@ export async function PATCH(
     if (!todo) return NextResponse.json({ error: "Todo not found" }, { status: 404 });
 
     if (todo.userId.toString() !== session.user.id) {
-      // Single-user app: just check session exists (already done above)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (title       !== undefined) todo.title       = title.trim();
@@ -82,6 +82,10 @@ export async function DELETE(
 
     const todo = await Todo.findById(id);
     if (!todo) return NextResponse.json({ error: "Todo not found" }, { status: 404 });
+
+    if (todo.userId.toString() !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     await todo.deleteOne();
     return NextResponse.json({ message: "Todo deleted successfully" });

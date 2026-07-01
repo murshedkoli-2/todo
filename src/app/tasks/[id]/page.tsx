@@ -48,7 +48,7 @@ export default async function TaskDetailPage({ params }: Props) {
   if (!session?.user?.id) redirect("/login");
 
   const todo = await getTodo(params.id);
-  if (!todo) notFound();
+  if (!todo || todo.userId !== session.user.id) notFound();
 
   return <TaskView todo={todo} />;
 }
