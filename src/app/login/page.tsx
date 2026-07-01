@@ -18,6 +18,8 @@ function LoginForm() {
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
       setSuccess("Account verified successfully! You can now log in.");
+    } else if (searchParams.get("reset") === "true") {
+      setSuccess("Password reset successfully! You can now log in with your new password.");
     }
   }, [searchParams]);
 
@@ -144,13 +146,22 @@ function LoginForm() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="login-password"
-                className="text-sm font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="login-password"
+                  className="text-sm font-medium"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-semibold hover:underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="login-password"
                 type="password"
