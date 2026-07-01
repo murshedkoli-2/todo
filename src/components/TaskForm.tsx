@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Todo, PaymentStatus } from "@/lib/types";
+import { Todo, PaymentStatus, TodoStatus } from "@/lib/types";
 
 interface TaskFormProps {
   todo?: Todo | null;
@@ -12,7 +12,7 @@ interface TaskFormProps {
 
 const MAX_IMAGES = 8;
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: { value: TodoStatus; label: string; color: string }[] = [
   { value: "todo",        label: "To Do",       color: "#4493f8" },
   { value: "in_progress", label: "In Progress",  color: "#e3b341" },
   { value: "completed",   label: "Completed",    color: "#3fb950" },
@@ -32,7 +32,7 @@ export default function TaskForm({ todo }: TaskFormProps) {
 
   const [title,       setTitle]       = useState(todo?.title       ?? "");
   const [description, setDescription] = useState(todo?.description ?? "");
-  const [status,      setStatus]      = useState(todo?.status      ?? "todo");
+  const [status,      setStatus]      = useState<TodoStatus>(todo?.status ?? "todo");
   const [dueDate,     setDueDate]     = useState(
     todo?.dueDate ? todo.dueDate.slice(0, 10) : ""
   );

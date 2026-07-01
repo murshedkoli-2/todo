@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import dbConnect from "@/lib/dbConnect";
 import Todo from "@/models/Todo";
-import { Todo as TodoType } from "@/lib/types";
+import { Todo as TodoType, PaymentStatus } from "@/lib/types";
 import HomeClient from "@/components/HomeClient";
 
 async function getAllTodos(): Promise<TodoType[]> {
@@ -26,7 +26,7 @@ async function getAllTodos(): Promise<TodoType[]> {
       featureImage:    (t.featureImage as string | undefined) ?? null,
       paymentAmount:   (t.paymentAmount as number | undefined) ?? null,
       paymentCurrency: (t.paymentCurrency as string) ?? "BDT",
-      paymentStatus:   (t.paymentStatus as string) ?? "unpaid",
+      paymentStatus:   ((t.paymentStatus as string) ?? "unpaid") as PaymentStatus,
     }));
   } catch (error) {
     console.error("Failed to fetch todos from database:", error);

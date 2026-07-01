@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import dbConnect from "@/lib/dbConnect";
 import Todo from "@/models/Todo";
+import type { PaymentStatus } from "@/lib/types";
 
 function serialize(todo: InstanceType<typeof Todo>) {
   return {
@@ -47,7 +48,7 @@ export async function GET() {
       featureImage:    (t.featureImage as string | undefined) ?? null,
       paymentAmount:   (t.paymentAmount as number | undefined) ?? null,
       paymentCurrency: (t.paymentCurrency as string) ?? "BDT",
-      paymentStatus:   (t.paymentStatus as string) ?? "unpaid",
+      paymentStatus:   ((t.paymentStatus as string) ?? "unpaid") as PaymentStatus,
     }));
 
     return NextResponse.json({ todos: result });
