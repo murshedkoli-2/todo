@@ -159,7 +159,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
         {error && (
           <div
             className="mb-6 px-4 py-3 rounded-xl text-sm flex items-center gap-2 animate-fade-in"
-            style={{ background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)", color: "var(--red)" }}
+            style={{ background: "rgba(248,81,73,0.08)", border: "1px solid rgba(248,81,73,0.25)", color: "var(--red)" }}
           >
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -442,7 +442,8 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
       {/* ── Image Lightbox Modal ─────────────────── */}
       {lightboxImage && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+          style={{ background: "var(--overlay-bg)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
           onClick={() => setLightboxImage(null)}
         >
           <button

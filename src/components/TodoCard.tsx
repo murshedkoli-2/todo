@@ -65,9 +65,7 @@ export default function TodoCard({ todo, onEdit, onView, onStatusChange }: TodoC
       style={{
         background:  hovered ? "var(--bg-card-hover)" : "var(--bg-card)",
         border:      `1px solid ${hovered ? "var(--border-hover)" : "var(--border)"}`,
-        boxShadow:   hovered
-          ? "0 8px 28px rgba(0,0,0,0.45)"
-          : "0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.25)",
+        boxShadow:   hovered ? "var(--shadow-card-hover)" : "var(--shadow-card)",
       }}
       onClick={() => onView?.(todo)}
       onMouseEnter={() => setHovered(true)}
@@ -232,7 +230,7 @@ export default function TodoCard({ todo, onEdit, onView, onStatusChange }: TodoC
                 style={{
                   background: "var(--bg-card)",
                   border: "1px solid var(--border-hover)",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                  boxShadow: "var(--shadow-popup)",
                 }}
               >
                 {STATUS_OPTIONS.map((opt) => (
@@ -244,7 +242,7 @@ export default function TodoCard({ todo, onEdit, onView, onStatusChange }: TodoC
                       color: todo.status === opt.value ? "var(--accent)" : "var(--text-primary)",
                       background: todo.status === opt.value ? "var(--accent-dim)" : "transparent",
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--hover-overlay)")}
                     onMouseLeave={e => (e.currentTarget.style.background = todo.status === opt.value ? "var(--accent-dim)" : "transparent")}
                   >
                     {opt.label}

@@ -136,7 +136,7 @@ export default function MenuBar({
                 onClick={() => onStatusFilterChange(f.value as "all" | DisplayStatus)}
                 className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150"
                 style={{
-                  background: active ? (f.value === "all" ? "rgba(255,255,255,0.1)" : `${colorMap[f.value]}22`) : "transparent",
+                  background: active ? (f.value === "all" ? "var(--active-overlay)" : `${colorMap[f.value]}22`) : "transparent",
                   color:      active ? colorMap[f.value] : "var(--text-secondary)",
                   border:     active ? `1px solid ${colorMap[f.value]}44` : "1px solid transparent",
                 }}
