@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   WalletAccount, AccountType,
   ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_COLORS,
@@ -70,7 +71,12 @@ export default function WalletClient({ initialWallets }: WalletClientProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4 h-14">
             <div className="flex items-center gap-2.5 flex-shrink-0">
-              <span className="font-semibold text-base tracking-tight" style={{ color: "var(--text-primary)" }}>TaskFlow</span>
+              <div className="relative w-8 h-8 flex-shrink-0">
+                <Image src="/logo.png" alt="TaskFlow Logo" fill className="object-contain drop-shadow" />
+              </div>
+              <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
+                TaskFlow
+              </span>
             </div>
 
             {/* Tab switcher — Tasks | Ledger | Wallet */}

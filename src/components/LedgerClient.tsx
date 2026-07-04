@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { LedgerPersonWithBalance } from "@/lib/types";
 import AddPersonModal from "@/components/AddPersonModal";
 import PersonDetailModal from "@/components/PersonDetailModal";
@@ -58,7 +59,12 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
           <div className="flex items-center gap-4 h-14">
             {/* Logo */}
             <div className="flex items-center gap-2.5 flex-shrink-0">
-              <span className="font-semibold text-base tracking-tight" style={{ color: "var(--text-primary)" }}>TaskFlow</span>
+              <div className="relative w-8 h-8 flex-shrink-0">
+                <Image src="/logo.png" alt="TaskFlow Logo" fill className="object-contain drop-shadow" />
+              </div>
+              <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
+                TaskFlow
+              </span>
             </div>
 
             {/* Tab switcher */}
