@@ -1,12 +1,13 @@
 {
-  "name": "todo",
-  "version": "0.1.0",
+  "name": "taskflow",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.2",

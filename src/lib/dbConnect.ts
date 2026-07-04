@@ -1,38 +1,61 @@
 import "@/lib/dnsPatch";
 import mongoose from "mongoose";
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error(
+    'Missing environment variable: "MONGODB_URI". ' +
+    'Please set it in .env.local (development) or in your hosting provider environment variables (production).'
+  );
 }
 
-const MONGODB_URI = process.env.MONGODB_URI;
+/** Cached connection — reused across hot-reloads in dev and across requests in serverless. */
+interface MongooseCache {
+  conn: mongoose.Connection | null;
+  promise: Promise<mongoose.Connection> | null;
+}
 
 declare global {
   // eslint-disable-next-line no-var
-  var mongoose: {
-    conn: mongoose.Connection | null;
-    promise: Promise<mongoose.Connection> | null;
-  };
+  var __mongooseCache: MongooseCache | undefined;
 }
 
-let cached = global.mongoose;
+const cached: MongooseCache = global.__mongooseCache ?? { conn: null, promise: null };
+global.__mongooseCache = cached;
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+const MONGOOSE_OPTIONS: mongoose.ConnectOptions = {
+  bufferCommands: false,          // Fail fast — don't queue commands when disconnected
+  maxPoolSize: 10,                // Connection pool — good for serverless
+  serverSelectionTimeoutMS: 10_000,
+  socketTimeoutMS: 45_000,
+};
 
 async function dbConnect(): Promise<mongoose.Connection> {
-  if (cached.conn) {
+  // Return cached connection if healthy
+  if (cached.conn && cached.conn.readyState === 1) {
     return cached.conn;
+  }
+
+  // Reset stale connection
+  if (cached.conn && cached.conn.readyState !== 1) {
+    cached.conn = null;
+    cached.promise = null;
   }
 
   if (!cached.promise) {
     cached.promise = mongoose
-      .connect(MONGODB_URI, { bufferCommands: false })
+      .connect(MONGODB_URI!, MONGOOSE_OPTIONS)
       .then((m) => m.connection);
   }
 
-  cached.conn = await cached.promise;
+  try {
+    cached.conn = await cached.promise;
+  } catch (err) {
+    cached.promise = null; // Allow retry on next request
+    throw err;
+  }
+
   return cached.conn;
 }
 

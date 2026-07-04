@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import Link from "next/link";
 import { DisplayStatus } from "@/lib/types";
 import AuthButton from "@/components/AuthButton";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -63,6 +64,30 @@ export default function MenuBar({
             <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
               TaskFlow
             </span>
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex items-center gap-1 rounded-lg p-0.5 flex-shrink-0" style={{ background: "var(--hover-overlay)" }}>
+            <span
+              className="px-3 py-1.5 rounded-md text-xs font-semibold"
+              style={{ background: "var(--bg-card)", color: "var(--text-primary)", boxShadow: "var(--shadow-card)" }}
+            >
+              Tasks
+            </span>
+            <Link
+              href="/ledger"
+              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Ledger
+            </Link>
+            <Link
+              href="/wallet"
+              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Wallet
+            </Link>
           </div>
 
           {/* Search */}

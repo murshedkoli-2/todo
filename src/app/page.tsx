@@ -6,8 +6,15 @@ import dbConnect from "@/lib/dbConnect";
 import Todo from "@/models/Todo";
 import { Todo as TodoType, PaymentStatus } from "@/lib/types";
 import HomeClient from "@/components/HomeClient";
+import { Types } from "mongoose";
 
 async function getAllTodos(userId: string): Promise<TodoType[]> {
+  // Guard: userId must be a valid MongoDB ObjectId (24-char hex string)
+  if (!Types.ObjectId.isValid(userId)) {
+    console.warn("getAllTodos called with invalid userId:", userId);
+    return [];
+  }
+
   try {
     await dbConnect();
     const rawTodos = await Todo.find({ userId }).sort({ createdAt: -1 }).lean();
@@ -38,6 +45,11 @@ export default async function HomePage() {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login");
+  }
+
+  // If the session has a stale/invalid userId (e.g. "admin"), force re-login
+  if (!Types.ObjectId.isValid(session.user.id)) {
+    redirect("/api/auth/signout?callbackUrl=/login");
   }
 
   const todos = await getAllTodos(session.user.id);

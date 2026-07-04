@@ -1,36 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TaskFlow
+
+A premium productivity and personal finance app built with **Next.js 14**, **MongoDB**, and **NextAuth**.
+
+## Features
+
+- ✅ **Tasks** — Create, track, and manage todos with status (To Do / In Progress / Completed / Overdue)
+- 📒 **Ledger** — Track receivables and payables per person with running balance history
+- 💰 **Wallet** — Monitor your cash, mobile banking (bKash, Nagad…), and bank account balances
+- 🌗 **Light / Dark mode** — Defaults to light; persists user preference
+- 🔐 **Auth** — Email/password with OTP email verification and JWT sessions
+- 📷 **Image uploads** — Via ImgBB CDN for task attachments
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Framework | Next.js 14 (App Router) |
+| Database | MongoDB Atlas + Mongoose |
+| Auth | NextAuth v5 (beta) |
+| Styling | Tailwind CSS + CSS variables |
+| Email | Nodemailer (Gmail SMTP) |
+| Images | ImgBB API |
+| Deployment | Vercel (recommended) |
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Clone & Install
+
+```bash
+git clone <your-repo-url>
+cd taskflow
+npm install
+```
+
+### 2. Configure Environment
+
+```bash
+cp .env.local.example .env.local
+```
+
+Fill in the values in `.env.local` — see the file for documentation on each variable.
+
+### 3. Run Locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Type-check & Lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run type-check
+npm run lint
+```
 
-## Learn More
+### 5. Build for Production
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+npm run start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment (Vercel)
 
-## Deploy on Vercel
+1. Push your repo to GitHub
+2. Import the project in [Vercel](https://vercel.com)
+3. Set all environment variables from `.env.local.example` in Vercel → Settings → Environment Variables
+4. Set `NEXTAUTH_URL` to your production domain (e.g. `https://taskflow.vercel.app`)
+5. Deploy ✓
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Required Environment Variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable | Description |
+|----------|-------------|
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `NEXTAUTH_SECRET` | Random secret (`openssl rand -hex 32`) |
+| `NEXTAUTH_URL` | Full public URL of your deployment |
+| `GMAIL_USER` | Gmail address for OTP emails |
+| `GMAIL_APP_PASSWORD` | Gmail App Password (not your login password) |
+| `IMGBB_API_KEY` | ImgBB API key for image uploads |
+| `AUTH_PIN` | 4-digit admin PIN (optional) |
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── api/           # API routes (auth, todos, ledger, wallet)
+│   ├── ledger/        # Ledger page
+│   ├── wallet/        # Wallet page
+│   ├── tasks/         # Task detail pages
+│   ├── login/         # Auth pages
+│   ├── register/
+│   └── layout.tsx
+├── components/        # Shared UI components
+├── lib/               # DB connection, types, utilities
+└── models/            # Mongoose models
+```
+
+---
+
+## License
+
+MIT

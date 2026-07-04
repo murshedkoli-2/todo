@@ -10,12 +10,12 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "dark",
+  theme: "light",
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
 
   // On mount, read from localStorage (the inline script may have already
   // applied the class, so we sync React state to match).
@@ -24,9 +24,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (stored === "light" || stored === "dark") {
       setTheme(stored);
     } else {
-      // Fall back to system preference
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      setTheme(prefersDark ? "dark" : "light");
+      // Default: light mode. Only go dark if user explicitly stored it.
+      setTheme("light");
     }
   }, []);
 
