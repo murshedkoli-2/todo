@@ -52,46 +52,46 @@ export default function MenuBar({
         WebkitBackdropFilter: "blur(12px)",
       }}
     >
-      {/* Top nav row */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4 h-14">
+      {/* ── Top nav row ─────────────────────────────── */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-2 sm:gap-4 h-14">
 
           {/* Logo */}
-          <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="relative w-8 h-8 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="relative w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
               <Image src="/logo.png" alt="TaskFlow Logo" fill className="object-contain drop-shadow" />
             </div>
-            <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
+            <span className="font-semibold text-sm sm:text-base hidden xs:block sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
               TaskFlow
             </span>
           </div>
 
           {/* Tab switcher */}
-          <div className="flex items-center gap-1 rounded-lg p-0.5 flex-shrink-0" style={{ background: "var(--hover-overlay)" }}>
+          <div className="flex items-center gap-0.5 sm:gap-1 rounded-lg p-0.5 flex-shrink-0" style={{ background: "var(--hover-overlay)" }}>
             <span
-              className="px-3 py-1.5 rounded-md text-xs font-semibold"
+              className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold"
               style={{ background: "var(--bg-card)", color: "var(--text-primary)", boxShadow: "var(--shadow-card)" }}
             >
               Tasks
             </span>
             <Link
               href="/ledger"
-              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+              className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
               style={{ color: "var(--text-secondary)" }}
             >
               Ledger
             </Link>
             <Link
               href="/wallet"
-              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+              className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
               style={{ color: "var(--text-secondary)" }}
             >
               Wallet
             </Link>
           </div>
 
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
+          {/* Search — visible on sm+, hidden on mobile (shown in row below) */}
+          <div className="relative hidden sm:flex flex-1 max-w-sm">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
               style={{ color: "var(--text-muted)" }}
@@ -117,7 +117,7 @@ export default function MenuBar({
               style={{ borderRadius: "8px" }}
             />
             <span
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs hidden sm:flex items-center gap-1 select-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs hidden lg:flex items-center gap-1 select-none"
               style={{ color: "var(--text-muted)" }}
             >
               <kbd className="px-1 py-0.5 rounded text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>Ctrl</kbd>
@@ -136,9 +136,42 @@ export default function MenuBar({
         </div>
       </div>
 
-      {/* Filter pills row */}
+      {/* ── Mobile search row (xs only) ─────────────── */}
       <div
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        className="sm:hidden px-3 pb-2"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+            style={{ color: "var(--text-muted)" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            id="todo-search-mobile"
+            type="search"
+            placeholder="Search todos…"
+            defaultValue={search}
+            onChange={handleSearchInput}
+            className="input-dark pl-9 h-9 text-sm w-full"
+            aria-label="Search todos"
+            style={{ borderRadius: "8px" }}
+          />
+        </div>
+      </div>
+
+      {/* ── Filter pills row ─────────────────────────── */}
+      <div
+        className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8"
         style={{ borderTop: "1px solid var(--border)" }}
       >
         <div

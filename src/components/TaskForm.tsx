@@ -201,15 +201,15 @@ export default function TaskForm({ todo }: TaskFormProps) {
         </div>
       </header>
 
-      {/* ── Page body ──────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* ── Page body ────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
 
         {/* Page title */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
             {isEdit ? "Edit Task" : "Create New Task"}
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-xs sm:text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
             {isEdit
               ? "Update the details, images, and status of this task."
               : "Fill in the details below and upload images to create your task."}
@@ -326,8 +326,8 @@ export default function TaskForm({ todo }: TaskFormProps) {
                     type="date"
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
-                    className="input-dark"
-                    style={{ colorScheme: "dark", maxWidth: "220px" }}
+                    className="input-dark w-full"
+                    style={{ colorScheme: "dark" }}
                   />
                 </div>
               </div>
@@ -353,8 +353,8 @@ export default function TaskForm({ todo }: TaskFormProps) {
                       id="task-payment-currency"
                       value={paymentCurrency}
                       onChange={e => setPaymentCurrency(e.target.value)}
-                      className="input-dark"
-                      style={{ width: "90px", flexShrink: 0 }}
+                      className="input-dark flex-shrink-0"
+                      style={{ width: "90px" }}
                     >
                       {CURRENCIES.map(c => (
                         <option key={c} value={c}>{c}</option>
@@ -595,9 +595,9 @@ export default function TaskForm({ todo }: TaskFormProps) {
             </div>
           </div>
 
-          {/* ── Action bar ─────────────────────── */}
+          {/* ── Action bar ───────────────── */}
           <div
-            className="mt-6 flex items-center justify-between rounded-2xl px-6 py-4"
+            className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-between rounded-2xl px-4 sm:px-6 py-4 gap-3"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
             {/* Delete (edit mode only) */}
@@ -607,7 +607,7 @@ export default function TaskForm({ todo }: TaskFormProps) {
                   type="button"
                   onClick={handleDelete}
                   disabled={busy}
-                  className="btn-danger flex items-center gap-2"
+                  className="btn-danger flex items-center gap-2 w-full sm:w-auto justify-center"
                 >
                   {isDeleting ? (
                     <>
@@ -631,12 +631,12 @@ export default function TaskForm({ todo }: TaskFormProps) {
             </div>
 
             {/* Cancel + Save */}
-            <div className="flex items-center gap-3">
-              <Link href="/" className="btn-secondary">Cancel</Link>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <Link href="/" className="btn-secondary flex-1 sm:flex-none justify-center">Cancel</Link>
               <button
                 type="submit"
                 disabled={busy}
-                className="btn-primary px-6"
+                className="btn-primary px-6 flex-1 sm:flex-none justify-center"
               >
                 {saving ? (
                   <>

@@ -92,7 +92,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
   };
 
   return (
-    <div className="min-h-screen pb-12" style={{ background: "var(--bg-primary)" }}>
+    <div className="min-h-screen pb-safe" style={{ background: "var(--bg-primary)" }}>
       {/* ── Top Header Bar ───────────────────────── */}
       <header
         className="sticky top-0 z-40 flex items-center gap-3 px-4 sm:px-6 h-14"
@@ -155,7 +155,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
       </header>
 
       {/* ── Main Container ──────────────────────── */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
         {error && (
           <div
             className="mb-6 px-4 py-3 rounded-xl text-sm flex items-center gap-2 animate-fade-in"
@@ -208,7 +208,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
                 {todo.title}
               </h1>
 
-              <div className="flex items-center gap-4 text-xs" style={{ color: "var(--text-muted)" }}>
+              <div className="flex items-center gap-3 sm:gap-4 text-xs flex-wrap" style={{ color: "var(--text-muted)" }}>
                 <span>Created {formatDate(todo.createdAt)}</span>
                 <span>•</span>
                 <span>Updated {formatTime(todo.updatedAt)}</span>
@@ -280,7 +280,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
                 )}
 
                 {/* Thumbnails grid */}
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 pt-2">
+                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3 pt-2">
                   {todo.images.map((url) => {
                     const isSelected = activeImage === url;
                     const isFeature = todo.featureImage === url;

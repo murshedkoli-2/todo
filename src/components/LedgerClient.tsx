@@ -53,38 +53,38 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
       {/* ── Top Nav ── */}
       <header
         className="sticky top-0 z-40"
-        style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)", backdropFilter: "blur(12px)" }}
+        style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 h-14">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 sm:gap-4 h-14">
             {/* Logo */}
-            <div className="flex items-center gap-2.5 flex-shrink-0">
-              <div className="relative w-8 h-8 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="relative w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                 <Image src="/logo.png" alt="TaskFlow Logo" fill className="object-contain drop-shadow" />
               </div>
-              <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
+              <span className="font-semibold text-sm sm:text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
                 TaskFlow
               </span>
             </div>
 
             {/* Tab switcher */}
-            <div className="flex items-center gap-1 rounded-lg p-0.5 ml-2" style={{ background: "var(--hover-overlay)" }}>
+            <div className="flex items-center gap-0.5 sm:gap-1 rounded-lg p-0.5" style={{ background: "var(--hover-overlay)" }}>
               <Link
                 href="/"
-                className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+                className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
                 style={{ color: "var(--text-secondary)" }}
               >
                 Tasks
               </Link>
               <span
-                className="px-3 py-1.5 rounded-md text-xs font-semibold"
+                className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold"
                 style={{ background: "var(--bg-card)", color: "var(--text-primary)", boxShadow: "var(--shadow-card)" }}
               >
                 Ledger
               </span>
               <Link
                 href="/wallet"
-                className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+                className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80"
                 style={{ color: "var(--text-secondary)" }}
               >
                 Wallet
@@ -98,32 +98,33 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full flex-1">
 
         {/* ── Page header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
               Receivable & Payable
             </h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
               Track money owed to/from people
             </p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="btn-primary self-start sm:self-auto"
+            className="btn-primary flex-shrink-0"
             id="add-person-btn"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            Add Person
+            <span className="hidden xs:inline sm:inline">Add Person</span>
+            <span className="xs:hidden sm:hidden">Add</span>
           </button>
         </div>
 
         {/* ── Summary cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 sm:mb-8">
           {/* Receivable */}
           <div className="rounded-2xl p-4" style={{ background: "rgba(63,185,80,0.08)", border: "1px solid rgba(63,185,80,0.18)", boxShadow: "var(--shadow-card)" }}>
             <div className="flex items-center justify-between mb-3">
@@ -186,7 +187,7 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
 
         {/* ── Search ── */}
         {persons.length > 0 && (
-          <div className="relative mb-5 max-w-sm">
+          <div className="relative mb-5 max-w-full sm:max-w-sm">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--text-muted)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>

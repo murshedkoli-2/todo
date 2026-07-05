@@ -186,7 +186,7 @@ export default function AccountDetailModal({ account, onClose, onAccountUpdate, 
               </button>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium" style={{ color: "var(--text-muted)" }}>৳</span>
                 <input
@@ -197,7 +197,7 @@ export default function AccountDetailModal({ account, onClose, onAccountUpdate, 
               </div>
               <input
                 type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)}
-                className="input-dark h-9 px-3 text-sm rounded-lg" style={{ width: "140px" }}
+                className="input-dark h-9 px-3 text-sm rounded-lg w-full sm:w-36"
               />
             </div>
             <div className="flex gap-2">
@@ -258,7 +258,7 @@ export default function AccountDetailModal({ account, onClose, onAccountUpdate, 
                   <button
                     onClick={() => handleDeleteTx(tx._id)}
                     disabled={deletingTx === tx._id}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:opacity-70"
+                    className="w-6 h-6 rounded-lg flex items-center justify-center opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all hover:opacity-70 flex-shrink-0"
                     style={{ background: "rgba(248,81,73,0.1)", color: "#f85149" }}
                   >
                     {deletingTx === tx._id ? (

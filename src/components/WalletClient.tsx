@@ -66,24 +66,24 @@ export default function WalletClient({ initialWallets }: WalletClientProps) {
       {/* ── Top Nav ── */}
       <header
         className="sticky top-0 z-40"
-        style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)", backdropFilter: "blur(12px)" }}
+        style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 h-14">
-            <div className="flex items-center gap-2.5 flex-shrink-0">
-              <div className="relative w-8 h-8 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 sm:gap-4 h-14">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="relative w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
                 <Image src="/logo.png" alt="TaskFlow Logo" fill className="object-contain drop-shadow" />
               </div>
-              <span className="font-semibold text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
+              <span className="font-semibold text-sm sm:text-base hidden sm:block tracking-tight" style={{ color: "var(--text-primary)" }}>
                 TaskFlow
               </span>
             </div>
 
             {/* Tab switcher — Tasks | Ledger | Wallet */}
-            <div className="flex items-center gap-1 rounded-lg p-0.5 flex-shrink-0" style={{ background: "var(--hover-overlay)" }}>
-              <Link href="/" className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80" style={{ color: "var(--text-secondary)" }}>Tasks</Link>
-              <Link href="/ledger" className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80" style={{ color: "var(--text-secondary)" }}>Ledger</Link>
-              <span className="px-3 py-1.5 rounded-md text-xs font-semibold" style={{ background: "var(--bg-card)", color: "var(--text-primary)", boxShadow: "var(--shadow-card)" }}>
+            <div className="flex items-center gap-0.5 sm:gap-1 rounded-lg p-0.5 flex-shrink-0" style={{ background: "var(--hover-overlay)" }}>
+              <Link href="/" className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80" style={{ color: "var(--text-secondary)" }}>Tasks</Link>
+              <Link href="/ledger" className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:opacity-80" style={{ color: "var(--text-secondary)" }}>Ledger</Link>
+              <span className="px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold" style={{ background: "var(--bg-card)", color: "var(--text-primary)", boxShadow: "var(--shadow-card)" }}>
                 Wallet
               </span>
             </div>
@@ -95,24 +95,25 @@ export default function WalletClient({ initialWallets }: WalletClientProps) {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full flex-1">
 
         {/* ── Page header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>My Balance</h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>Track your cash, mobile banking & bank accounts</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>My Balance</h1>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>Track your cash, mobile banking & bank accounts</p>
           </div>
-          <button onClick={() => setShowAdd(true)} className="btn-primary self-start sm:self-auto" id="add-account-btn">
+          <button onClick={() => setShowAdd(true)} className="btn-primary flex-shrink-0" id="add-account-btn">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            Add Account
+            <span className="hidden sm:inline">Add Account</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
 
         {/* ── Summary cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 sm:mb-8">
           {/* Total */}
           <div className="col-span-2 sm:col-span-1 rounded-2xl p-4" style={{ background: "linear-gradient(135deg, rgba(68,147,248,0.15), rgba(188,140,255,0.15))", border: "1px solid rgba(68,147,248,0.25)", boxShadow: "var(--shadow-card)" }}>
             <div className="flex items-center justify-between mb-3">

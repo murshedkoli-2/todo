@@ -89,32 +89,33 @@ export default function HomeClient({ initialTodos }: HomeClientProps) {
         onStatusFilterChange={setStatusFilter}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full flex-1 pb-safe">
 
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
               My Dashboard
             </h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
               Manage your personal tasks and track progress
             </p>
           </div>
           <button
             onClick={() => router.push("/tasks/new")}
-            className="btn-primary self-start sm:self-auto"
+            className="btn-primary flex-shrink-0"
             id="create-todo-btn"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            New Task
+            <span className="hidden sm:inline">New Task</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6 sm:mb-8">
           {(["todo", "in_progress", "completed", "overdue"] as const).map(s => {
             const active = statusFilter === s;
             const color  = STAT_COLOR[s];
