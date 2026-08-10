@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
+/** A counterparty — the person or shop a set of ledger entries belongs to. */
 export interface ILedger extends Document {
   userId: Types.ObjectId;
   name: string;
@@ -14,7 +15,6 @@ const LedgerSchema = new Schema<ILedger>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: [true, "User ID is required"],
-      index: true,
     },
     name: {
       type: String,
@@ -30,6 +30,8 @@ const LedgerSchema = new Schema<ILedger>(
   },
   { timestamps: true }
 );
+
+LedgerSchema.index({ userId: 1, createdAt: -1 });
 
 const Ledger: Model<ILedger> =
   mongoose.models.Ledger || mongoose.model<ILedger>("Ledger", LedgerSchema);

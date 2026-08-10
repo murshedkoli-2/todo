@@ -1,15 +1,28 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
+import { ACCOUNT_TYPES } from "@/lib/schemas/wallet";
+import type { AccountType } from "@/lib/schemas/wallet";
 
-export type AccountType = "cash" | "mobile_banking" | "bank_account";
+export type { AccountType };
 
 export interface IWallet extends Document {
   userId: Types.ObjectId;
-  name: string;           // e.g. "Cash", "bKash", "Dutch-Bangla Bank"
+  name: string;
   accountType: AccountType;
-  provider?: string;      // e.g. "bKash", "Nagad", "Rocket" for mobile banking; bank name for bank_account
-  accountNumber?: string; // optional last 4 digits or masked
-  balance: number;        // current balance (maintained by app)
-  color?: string;         // optional user-chosen accent color hex
+  /** e.g. "bKash" for mobile banking, the bank's name for an account. */
+  provider?: string;
+  accountNumber?: string;
+  /**
+   * Cached balance in integer minor units.
+   *
+   * `WalletTx` is the source of truth; this is maintained by `$inc` inside the
+   * same transaction as the transaction insert, so it is a fast read rather
+   * than an independent value that can disagree. `walletService.recompute`
+   * rebuilds it from the ledger if it ever needs reconciling.
+   */
+  balanceMinor: number;
+  /** @deprecated Pre-migration float column. Read via `readMinor`, never written. */
+  balance?: number;
+  color?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,7 +33,6 @@ const WalletSchema = new Schema<IWallet>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: [true, "User ID is required"],
-      index: true,
     },
     name: {
       type: String,
@@ -30,30 +42,26 @@ const WalletSchema = new Schema<IWallet>(
     },
     accountType: {
       type: String,
-      enum: ["cash", "mobile_banking", "bank_account"],
+      enum: ACCOUNT_TYPES,
       required: [true, "Account type is required"],
     },
-    provider: {
-      type: String,
-      trim: true,
-      maxlength: [60, "Provider name too long"],
-    },
-    accountNumber: {
-      type: String,
-      trim: true,
-      maxlength: [30, "Account number too long"],
-    },
-    balance: {
+    provider: { type: String, trim: true, maxlength: [60, "Provider name too long"] },
+    accountNumber: { type: String, trim: true, maxlength: [30, "Account number too long"] },
+    balanceMinor: {
       type: Number,
       default: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "Balance must be an integer number of minor units",
+      },
     },
-    color: {
-      type: String,
-      trim: true,
-    },
+    balance: { type: Number, default: undefined },
+    color: { type: String, trim: true },
   },
   { timestamps: true }
 );
+
+WalletSchema.index({ userId: 1, createdAt: 1 });
 
 const Wallet: Model<IWallet> =
   mongoose.models.Wallet || mongoose.model<IWallet>("Wallet", WalletSchema);

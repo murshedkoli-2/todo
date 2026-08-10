@@ -1,51 +1,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CloseIcon } from "@/components/ui/icons";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+const IOS_BANNER_DELAY_MS = 3000;
+
 /**
- * Shows a native-style "Add to Home Screen" banner on Android Chrome
- * and a manual instruction banner on iOS Safari (which doesn't support
- * the beforeinstallprompt event).
+ * "Add to home screen" banner: the native prompt on Chromium, manual
+ * instructions on iOS Safari (which has no `beforeinstallprompt` event).
+ * Sits above the mobile tab bar so it never covers navigation.
  */
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showAndroidBanner, setShowAndroidBanner] = useState(false);
-  const [showIOSBanner, setShowIOSBanner] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [variant, setVariant] = useState<"none" | "native" | "ios">("none");
 
   useEffect(() => {
-    // Don't show if already dismissed in this session
-    const wasDismissed = sessionStorage.getItem("pwa-banner-dismissed");
-    if (wasDismissed) return;
+    if (sessionStorage.getItem("pwa-banner-dismissed")) return;
 
-    // Don't show if already installed (running as standalone PWA)
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       ("standalone" in navigator && (navigator as { standalone?: boolean }).standalone === true);
     if (isStandalone) return;
 
-    // Detect iOS Safari
     const isIOS =
       /ipad|iphone|ipod/i.test(navigator.userAgent) &&
       !(window as { MSStream?: unknown }).MSStream;
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
     if (isIOS && isSafari) {
-      // Delay slightly so it doesn't flash immediately
-      const timer = setTimeout(() => setShowIOSBanner(true), 3000);
+      const timer = setTimeout(() => setVariant("ios"), IOS_BANNER_DELAY_MS);
       return () => clearTimeout(timer);
     }
 
-    // Android/Desktop Chrome: listen for the native prompt event
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setShowAndroidBanner(true);
+      setVariant("native");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
@@ -57,133 +52,64 @@ export default function PWAInstallPrompt() {
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
-      setShowAndroidBanner(false);
+      setVariant("none");
       setDeferredPrompt(null);
     }
   };
 
   const handleDismiss = () => {
-    setShowAndroidBanner(false);
-    setShowIOSBanner(false);
-    setDismissed(true);
+    setVariant("none");
     sessionStorage.setItem("pwa-banner-dismissed", "1");
   };
 
-  if (dismissed) return null;
+  if (variant === "none") return null;
 
-  // ── Android / Desktop Chrome banner ──────────────────────────────────────
-  if (showAndroidBanner) {
-    return (
-      <div
-        className="fixed bottom-4 left-4 right-4 z-50 flex items-center gap-3 rounded-2xl px-4 py-3 animate-fade-in-up"
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          boxShadow: "var(--shadow-modal)",
-          maxWidth: "480px",
-          margin: "0 auto",
-        }}
-      >
-        {/* Icon */}
-        <div
-          className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center"
-          style={{ background: "rgba(68,147,248,0.15)" }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon-192.png" alt="TaskFlow" className="w-9 h-9 rounded-lg" />
-        </div>
+  return (
+    <div
+      className="fixed bottom-20 lg:bottom-5 left-4 right-4 z-40 mx-auto rounded-card px-4 py-3.5 animate-fade-in-up"
+      style={{
+        maxWidth: "460px",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-modal)",
+      }}
+      role="dialog"
+      aria-label="Install TaskFlow"
+    >
+      <div className="flex items-start gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon-192.png" alt="" className="w-10 h-10 rounded-well flex-shrink-0" />
 
-        {/* Text */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight" style={{ color: "var(--text-primary)" }}>
+          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
             Install TaskFlow
           </p>
-          <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            Add to home screen for quick access
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            {variant === "native"
+              ? "Add it to your home screen for one-tap access."
+              : "Tap Share in Safari, then “Add to Home Screen”."}
           </p>
+
+          {variant === "native" && (
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={handleInstall} className="btn-primary !h-9 px-4 text-xs">
+                Install
+              </button>
+              <button onClick={handleDismiss} className="btn-ghost !h-9 text-xs">
+                Not now
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={handleDismiss}
-            className="text-xs font-medium px-2 py-1.5 rounded-lg"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Not now
-          </button>
-          <button
-            onClick={handleInstall}
-            className="btn-primary text-xs py-1.5 px-3"
-          >
-            Install
-          </button>
-        </div>
+        <button
+          onClick={handleDismiss}
+          className="btn-ghost w-8 h-8 px-0 flex-shrink-0"
+          aria-label="Dismiss"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
       </div>
-    );
-  }
-
-  // ── iOS Safari instruction banner ─────────────────────────────────────────
-  if (showIOSBanner) {
-    return (
-      <div
-        className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl px-4 py-4 animate-fade-in-up"
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          boxShadow: "var(--shadow-modal)",
-          maxWidth: "400px",
-          margin: "0 auto",
-        }}
-      >
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon-192.png" alt="TaskFlow" className="w-8 h-8 rounded-lg flex-shrink-0" />
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              Install TaskFlow
-            </p>
-          </div>
-          <button onClick={handleDismiss} style={{ color: "var(--text-muted)" }}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(68,147,248,0.12)" }}>
-              <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>1</span>
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Tap the <strong>Share</strong> button{" "}
-              <svg className="inline w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ verticalAlign: "middle" }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>{" "}
-              in Safari
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(68,147,248,0.12)" }}>
-              <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>2</span>
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Scroll down and tap <strong>Add to Home Screen</strong>
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(63,185,80,0.12)" }}>
-              <span className="text-xs font-bold" style={{ color: "#3fb950" }}>✓</span>
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Tap <strong>Add</strong> — done!
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }

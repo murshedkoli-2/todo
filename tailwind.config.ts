@@ -1,5 +1,14 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * Colours here mirror the CSS custom properties in `globals.css` so utility
+ * classes and token-driven inline styles stay in sync. Anything theme-aware
+ * should reference the `var(--…)` entries rather than the raw hex values.
+ *
+ * Prefer these utilities over `style={{ color: "var(--text-secondary)" }}`:
+ * the utility form supports `hover:`, `focus:` and responsive variants, which
+ * an inline style cannot express.
+ */
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,35 +18,82 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        dark: {
-          primary:   "#0e1217",
-          secondary: "#161b22",
-          card:      "#1c2128",
-          "card-hover": "#21262d",
+        canvas: "var(--bg-primary)",
+        chrome: "var(--bg-secondary)",
+        content: "var(--bg-content)",
+        surface: {
+          DEFAULT: "var(--bg-card)",
+          hover: "var(--bg-card-hover)",
+        },
+        sunken: "var(--bg-sunken)",
+        line: {
+          DEFAULT: "var(--border)",
+          hover: "var(--border-hover)",
+        },
+        ink: {
+          DEFAULT: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
         },
         accent: {
-          DEFAULT: "#4493f8",
-          hover:   "#58a6ff",
-          dim:     "rgba(68,147,248,0.15)",
+          DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
+          soft: "var(--accent-soft)",
+          dim: "var(--accent-dim)",
+          ink: "var(--accent-ink)",
         },
         status: {
-          todo:        "#4493f8",
-          in_progress: "#e3b341",
-          completed:   "#3fb950",
-          overdue:     "#f85149",
+          todo: "var(--accent)",
+          in_progress: "var(--yellow)",
+          completed: "var(--green)",
+          overdue: "var(--red)",
+        },
+        positive: {
+          DEFAULT: "var(--green)",
+          soft: "var(--green-soft)",
+          ink: "var(--green-ink)",
+        },
+        negative: {
+          DEFAULT: "var(--red)",
+          soft: "var(--red-soft)",
+          ink: "var(--red-ink)",
+        },
+        warning: {
+          DEFAULT: "var(--yellow)",
+          soft: "var(--yellow-soft)",
+          ink: "var(--yellow-ink)",
+        },
+        violet: {
+          DEFAULT: "var(--purple)",
+          soft: "var(--purple-soft)",
+          ink: "var(--purple-ink)",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Instrument Serif", "Georgia", "serif"],
       },
       borderRadius: {
-        "2xl": "16px",
-        "3xl": "20px",
+        control: "var(--radius-control)",
+        well: "var(--radius-well)",
+        card: "var(--radius-card)",
+        panel: "var(--radius-panel)",
       },
       boxShadow: {
-        card: "0 1px 0 rgba(255,255,255,0.06), 0 4px 16px rgba(0,0,0,0.3)",
-        "card-hover": "0 1px 0 rgba(255,255,255,0.1), 0 8px 28px rgba(0,0,0,0.45)",
-        glow: "0 0 0 3px rgba(68,147,248,0.25)",
+        xs: "var(--shadow-xs)",
+        flat: "var(--elevation-flat)",
+        raised: "var(--elevation-raised)",
+        floating: "var(--elevation-floating)",
+        card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
+        popup: "var(--shadow-popup)",
+        modal: "var(--shadow-modal)",
+      },
+      spacing: {
+        sidebar: "var(--sidebar-w)",
+      },
+      screens: {
+        xs: "420px",
       },
     },
   },

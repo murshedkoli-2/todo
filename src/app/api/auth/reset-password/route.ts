@@ -1,88 +1,20 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import dbConnect from "@/lib/dbConnect";
-import User from "@/models/User";
-import PasswordResetToken from "@/models/PasswordResetToken";
+import { handler, parseBody } from "@/lib/api/route";
+import { resetPasswordSchema } from "@/lib/schemas/auth";
+import { AUTH_LIMITS, clientIp, enforceRateLimits } from "@/lib/rateLimit";
+import { resetPassword } from "@/server/services/auth.service";
 
-// Apply DNS Patch for Vercel/MongoDB Atlas
-import "@/lib/dnsPatch";
+export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
-  try {
-    await dbConnect();
-    const { email, code, password } = await req.json();
+export const POST = handler(
+  async ({ request }) => {
+    const input = await parseBody(request, resetPasswordSchema);
 
-    if (!email || !code || !password) {
-      return NextResponse.json(
-        { error: "Email, verification code, and new password are required" },
-        { status: 400 }
-      );
-    }
+    await enforceRateLimits([
+      { key: `reset:ip:${clientIp(request)}`, rule: AUTH_LIMITS.verifyPerIp },
+      { key: `reset:email:${input.email}`, rule: AUTH_LIMITS.verifyPerEmail },
+    ]);
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Password must be at least 6 characters long" },
-        { status: 400 }
-      );
-    }
-
-    const cleanEmail = email.toLowerCase().trim();
-    const cleanCode = code.trim();
-
-    const resetRecord = await PasswordResetToken.findOne({ email: cleanEmail });
-
-    if (!resetRecord) {
-      return NextResponse.json(
-        { error: "Invalid or expired verification code" },
-        { status: 400 }
-      );
-    }
-
-    // Double check expiration (TTL index might take up to a minute to trigger)
-    if (new Date() > resetRecord.expiresAt) {
-      await PasswordResetToken.deleteOne({ _id: resetRecord._id });
-      return NextResponse.json(
-        { error: "Verification code has expired. Please request a new one." },
-        { status: 400 }
-      );
-    }
-
-    if (resetRecord.token !== cleanCode) {
-      return NextResponse.json(
-        { error: "Invalid verification code" },
-        { status: 400 }
-      );
-    }
-
-    // Hash the new password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Update the user password
-    const user = await User.findOneAndUpdate(
-      { email: cleanEmail },
-      { password: hashedPassword },
-      { new: true }
-    );
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    // Delete the reset token record
-    await PasswordResetToken.deleteOne({ _id: resetRecord._id });
-
-    return NextResponse.json({
-      success: true,
-      message: "Password has been reset successfully. You can now log in with your new password.",
-    });
-  } catch (error: unknown) {
-    console.error("Reset password error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
+    return resetPassword(input);
+  },
+  { public: true }
+);

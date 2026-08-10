@@ -1,198 +1,361 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Todo, getDisplayStatus, STATUS_LABELS, DisplayStatus } from "@/lib/types";
+import {
+  Todo, getDisplayStatus, STATUS_LABELS, STATUS_COLORS, DisplayStatus,
+} from "@/lib/types";
+import type { TodoStatus } from "@/lib/schemas/todo";
+import { api, errorMessage } from "@/lib/apiClient";
+import AppShell from "@/components/shell/AppShell";
 import TodoCard from "@/components/TodoCard";
-import MenuBar from "@/components/MenuBar";
+import TaskBoard from "@/components/TaskBoard";
+import FocusCard from "@/components/FocusCard";
+import PageToolbar, { SortOption } from "@/components/ui/PageToolbar";
+import SegmentedToggle, { Segment } from "@/components/ui/SegmentedToggle";
+import StatCard from "@/components/ui/StatCard";
+import EmptyState from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/ToastProvider";
+import {
+  TasksIcon, ClockIcon, CheckIcon, AlertIcon, PlusIcon, GridIcon, BoardIcon,
+} from "@/components/ui/icons";
 
 interface HomeClientProps {
   initialTodos: Todo[];
 }
 
-const STAT_ICON: Record<string, React.ReactNode> = {
-  todo: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-    </svg>
-  ),
-  in_progress: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  completed: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  overdue: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-    </svg>
-  ),
+type SortKey = "newest" | "oldest" | "due" | "title";
+type ViewMode = "grid" | "board";
+
+const SORT_OPTIONS: SortOption[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "due", label: "Due date" },
+  { value: "title", label: "Title" },
+];
+
+const VIEW_SEGMENTS: Segment<ViewMode>[] = [
+  { value: "grid", label: "Grid", color: "var(--accent)", icon: <GridIcon className="w-3.5 h-3.5" /> },
+  { value: "board", label: "Board", color: "var(--accent)", icon: <BoardIcon className="w-3.5 h-3.5" /> },
+];
+
+const STAT_ORDER: DisplayStatus[] = ["todo", "in_progress", "completed", "overdue"];
+
+const STAT_ICONS: Record<DisplayStatus, React.ReactNode> = {
+  todo: <TasksIcon className="w-5 h-5" />,
+  in_progress: <ClockIcon className="w-5 h-5" />,
+  completed: <CheckIcon className="w-5 h-5" />,
+  overdue: <AlertIcon className="w-5 h-5" />,
 };
 
-const STAT_COLOR: Record<string, string> = {
-  todo:        "#4493f8",
-  in_progress: "#e3b341",
-  completed:   "#3fb950",
-  overdue:     "#f85149",
-};
+/** Sorts a copy so the source list stays untouched. */
+function sortTodos(todos: Todo[], key: SortKey): Todo[] {
+  const byNewest = (a: Todo, b: Todo) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+  switch (key) {
+    case "oldest":
+      return [...todos].sort((a, b) => -byNewest(a, b));
+    case "title":
+      return [...todos].sort((a, b) => a.title.localeCompare(b.title));
+    case "due":
+      return [...todos].sort((a, b) => {
+        // Undated work sinks below anything with a deadline.
+        if (!a.dueDate && !b.dueDate) return byNewest(a, b);
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+    default:
+      return [...todos].sort(byNewest);
+  }
+}
+
+/** The one task worth surfacing above everything else. */
+function pickFocusTask(todos: Todo[]): Todo | null {
+  const open = todos.filter((todo) => todo.status !== "completed" && todo.dueDate);
+  if (open.length === 0) return null;
+  // Soonest deadline, overdue first — that is what "next" means here.
+  return open.sort(
+    (a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()
+  )[0]!;
+}
 
 export default function HomeClient({ initialTodos }: HomeClientProps) {
   const router = useRouter();
-  const [todos, setTodos]           = useState<Todo[]>(initialTodos);
-  const [search, setSearch]         = useState("");
+  const toast = useToast();
+
+  const [todos, setTodos] = useState<Todo[]>(initialTodos);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisplayStatus>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const [view, setView] = useState<ViewMode>("grid");
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
 
-  const counts = {
-    todo:        todos.filter(t => getDisplayStatus(t) === "todo").length,
-    in_progress: todos.filter(t => getDisplayStatus(t) === "in_progress").length,
-    completed:   todos.filter(t => getDisplayStatus(t) === "completed").length,
-    overdue:     todos.filter(t => getDisplayStatus(t) === "overdue").length,
-  };
+  const counts = useMemo(() => {
+    const tally: Record<DisplayStatus, number> = {
+      todo: 0, in_progress: 0, completed: 0, overdue: 0,
+    };
+    for (const todo of todos) tally[getDisplayStatus(todo)] += 1;
+    return tally;
+  }, [todos]);
 
-  const filteredTodos = todos.filter(todo => {
-    const ds = getDisplayStatus(todo);
-    const matchesStatus = statusFilter === "all" || ds === statusFilter;
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !q ||
-      todo.title.toLowerCase().includes(q) ||
-      (todo.description?.toLowerCase().includes(q) ?? false);
-    return matchesStatus && matchesSearch;
-  });
+  const focusTask = useMemo(() => pickFocusTask(todos), [todos]);
 
-  /* Status quick-change (inline on card — no page nav needed) */
-  const handleStatusChange = async (id: string, status: string) => {
-    const res = await fetch(`/api/todos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+  const visibleTodos = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = todos.filter((todo) => {
+      const status = getDisplayStatus(todo);
+      // Completed work drops out of the default grid so it only shows what is
+      // still open. The Completed stat card brings it back, and an active
+      // search spans everything so finished tasks stay findable.
+      const matchesStatus =
+        statusFilter === "all"
+          ? Boolean(query) || status !== "completed"
+          : status === statusFilter;
+      const matchesSearch =
+        !query ||
+        todo.title.toLowerCase().includes(query) ||
+        (todo.description?.toLowerCase().includes(query) ?? false);
+      return matchesStatus && matchesSearch;
     });
-    if (!res.ok) throw new Error("Failed to update status");
-    const updated: Todo = await res.json();
-    setTodos(prev => prev.map(t => t._id === updated._id ? { ...updated, ownerName: "Me" } : t));
-  };
+    return sortTodos(filtered, sortKey);
+  }, [todos, search, statusFilter, sortKey]);
+
+  /* The board shows every column, so it must not have completed work filtered
+     out from under it — only search and the explicit filter apply. */
+  const boardTodos = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return todos.filter(
+      (todo) =>
+        !query ||
+        todo.title.toLowerCase().includes(query) ||
+        (todo.description?.toLowerCase().includes(query) ?? false)
+    );
+  }, [todos, search]);
+
+  const allCaughtUp =
+    statusFilter === "all" && !search.trim() && visibleTodos.length === 0 && counts.completed > 0;
+
+  /**
+   * Applies the new status immediately and rolls back if the request fails.
+   *
+   * The previous version awaited the response before touching state, so every
+   * status change froze the card for a round trip; a failure was reported in a
+   * banner at the top of the page the user had usually scrolled past.
+   */
+  const handleStatusChange = useCallback(
+    async (id: string, status: TodoStatus) => {
+      const previous = todos.find((todo) => todo._id === id);
+      if (!previous || previous.status === status) return;
+
+      setTodos((current) =>
+        current.map((todo) => (todo._id === id ? { ...todo, status } : todo))
+      );
+      setPendingIds((current) => new Set(current).add(id));
+
+      try {
+        const updated = await api<Todo>(`/api/todos/${id}`, {
+          method: "PATCH",
+          body: { status },
+        });
+        setTodos((current) =>
+          current.map((todo) => (todo._id === id ? updated : todo))
+        );
+      } catch (error) {
+        setTodos((current) =>
+          current.map((todo) => (todo._id === id ? previous : todo))
+        );
+        toast.error(errorMessage(error));
+      } finally {
+        setPendingIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [todos, toast]
+  );
+
+  const openTask = useCallback(
+    (todo: Todo) => router.push(`/tasks/${todo._id}`),
+    [router]
+  );
 
   return (
-    <div className="flex flex-col flex-1 min-h-screen" style={{ background: "var(--bg-primary)" }}>
-      <MenuBar
-        search={search}
+    <AppShell workspace="My Workspace">
+      <PageToolbar
+        title="Tasks"
+        count={view === "board" ? boardTodos.length : visibleTodos.length}
+        subtitle={
+          view === "grid" && statusFilter === "all" && !search.trim() && counts.completed > 0
+            ? `${counts.completed} completed task${counts.completed === 1 ? "" : "s"} hidden — open the Completed card to see ${counts.completed === 1 ? "it" : "them"}.`
+            : undefined
+        }
+        searchValue={search}
+        searchPlaceholder="Search tasks…"
         onSearchChange={setSearch}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        sortOptions={view === "grid" ? SORT_OPTIONS : undefined}
+        sortValue={sortKey}
+        onSortChange={(value) => setSortKey(value as SortKey)}
+        actions={
+          <>
+            <div className="w-[168px] flex-shrink-0">
+              <SegmentedToggle
+                segments={VIEW_SEGMENTS}
+                value={view}
+                onChange={setView}
+                ariaLabel="Task view"
+              />
+            </div>
+            <button
+              onClick={() => router.push("/tasks/new")}
+              className="btn-secondary flex-shrink-0"
+              id="create-todo-btn"
+            >
+              <PlusIcon className="w-4 h-4" />
+              New task
+            </button>
+          </>
+        }
       />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full flex-1 pb-safe">
-
-        {/* Page header */}
-        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-              My Dashboard
-            </h1>
-            <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              Manage your personal tasks and track progress
-            </p>
-          </div>
-          <button
-            onClick={() => router.push("/tasks/new")}
-            className="btn-primary flex-shrink-0"
-            id="create-todo-btn"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">New Task</span>
-            <span className="sm:hidden">New</span>
-          </button>
-        </div>
-
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6 sm:mb-8">
-          {(["todo", "in_progress", "completed", "overdue"] as const).map(s => {
-            const active = statusFilter === s;
-            const color  = STAT_COLOR[s];
-            return (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
-                className={`stat-${s} rounded-2xl border p-4 text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]`}
-                style={{
-                  outline: active ? `2px solid ${color}` : "none",
-                  outlineOffset: "2px",
-                  boxShadow: active ? `0 0 0 4px ${color}14` : "var(--shadow-card)",
-                }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${color}20`, color }}
-                  >
-                    {STAT_ICON[s]}
-                  </div>
-                  <span className="text-2xl font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                    {counts[s]}
-                  </span>
-                </div>
-                <p className="text-xs font-semibold tracking-wide" style={{ color: active ? color : "var(--text-muted)" }}>
-                  {STATUS_LABELS[s]}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Task grid */}
-        {filteredTodos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-28 text-center">
-            <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}
-            >
-              <svg className="w-9 h-9" style={{ color: "var(--text-muted)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
+      {/*
+        Bento first row: the single next-due task gets the wide cell, the four
+        status tallies share the rest. Previously four equal cards sat above the
+        board with nothing distinguishing what mattered.
+      */}
+      {todos.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 mb-7">
+          {focusTask && (
+            <div className="xl:col-span-1">
+              <FocusCard todo={focusTask} onOpen={openTask} />
             </div>
-            <h3 className="font-bold text-lg mb-2" style={{ color: "var(--text-primary)" }}>
-              {todos.length === 0 ? "No tasks yet" : "No matching tasks"}
-            </h3>
-            <p className="text-sm max-w-xs mb-6 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              {todos.length === 0
-                ? "Create your first task and start tracking your work."
-                : "Try adjusting your search or filter criteria."}
-            </p>
-            {todos.length === 0 && (
-              <button onClick={() => router.push("/tasks/new")} className="btn-primary px-6 py-2.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                Create first task
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredTodos.map((todo, i) => (
-              <div key={todo._id} className="animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
-                <TodoCard
-                  todo={todo}
-                  onView={t => router.push(`/tasks/${t._id}`)}
-                  onEdit={t => router.push(`/tasks/${t._id}/edit`)}
-                  onStatusChange={handleStatusChange}
-                />
-              </div>
+          )}
+
+          <div
+            className={`grid grid-cols-2 gap-3 sm:gap-4 ${
+              focusTask ? "xl:col-span-2" : "xl:col-span-3 xl:grid-cols-4"
+            }`}
+          >
+            {STAT_ORDER.map((status) => (
+              <StatCard
+                key={status}
+                icon={STAT_ICONS[status]}
+                color={STATUS_COLORS[status]}
+                label={STATUS_LABELS[status]}
+                value={
+                  <span className="text-2xl font-bold tabular-nums leading-none tracking-tight text-ink">
+                    {counts[status]}
+                  </span>
+                }
+                hint={`${Math.round((counts[status] / todos.length) * 100)}% of all tasks`}
+                progress={(counts[status] / todos.length) * 100}
+                active={statusFilter === status}
+                onClick={() => setStatusFilter(statusFilter === status ? "all" : status)}
+              />
             ))}
           </div>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+
+      {view === "board" ? (
+        boardTodos.length === 0 ? (
+          <EmptyState
+            icon={<BoardIcon className="w-9 h-9" />}
+            title={todos.length === 0 ? "No tasks yet" : "Nothing matches that"}
+            description={
+              todos.length === 0
+                ? "Create your first task and start tracking your work."
+                : "Try a different search term."
+            }
+            action={
+              todos.length === 0 ? (
+                <button onClick={() => router.push("/tasks/new")} className="btn-primary px-6">
+                  <PlusIcon className="w-4 h-4" />
+                  Create first task
+                </button>
+              ) : (
+                <button onClick={() => setSearch("")} className="btn-outline">
+                  Clear search
+                </button>
+              )
+            }
+          />
+        ) : (
+          <TaskBoard
+            todos={boardTodos}
+            onView={openTask}
+            onStatusChange={handleStatusChange}
+            pendingIds={pendingIds}
+          />
+        )
+      ) : visibleTodos.length === 0 ? (
+        <EmptyState
+          icon={allCaughtUp ? <CheckIcon className="w-9 h-9" /> : <TasksIcon className="w-9 h-9" />}
+          title={
+            todos.length === 0
+              ? "No tasks yet"
+              : allCaughtUp
+              ? "You're all caught up"
+              : "Nothing matches that"
+          }
+          description={
+            todos.length === 0
+              ? "Create your first task and start tracking your work."
+              : allCaughtUp
+              ? `Nothing open right now. All ${counts.completed} of your tasks are done.`
+              : "Try a different search term, or clear the active status filter."
+          }
+          action={
+            todos.length === 0 ? (
+              <button onClick={() => router.push("/tasks/new")} className="btn-primary px-6">
+                <PlusIcon className="w-4 h-4" />
+                Create first task
+              </button>
+            ) : allCaughtUp ? (
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button onClick={() => router.push("/tasks/new")} className="btn-primary px-6">
+                  <PlusIcon className="w-4 h-4" />
+                  New task
+                </button>
+                <button onClick={() => setStatusFilter("completed")} className="btn-outline">
+                  View completed
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                }}
+                className="btn-outline"
+              >
+                Clear filters
+              </button>
+            )
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
+          {visibleTodos.map((todo, index) => (
+            <div
+              key={todo._id}
+              className="animate-fade-in-up flex"
+              style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
+            >
+              <TodoCard
+                todo={todo}
+                onView={openTask}
+                onEdit={(item) => router.push(`/tasks/${item._id}/edit`)}
+                onStatusChange={handleStatusChange}
+                pending={pendingIds.has(todo._id)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </AppShell>
   );
 }

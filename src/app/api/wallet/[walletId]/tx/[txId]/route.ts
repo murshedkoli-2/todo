@@ -1,38 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import dbConnect from "@/lib/dbConnect";
-import Wallet from "@/models/Wallet";
-import WalletTx from "@/models/WalletTx";
-import { Types } from "mongoose";
+import { handler, parseParams } from "@/lib/api/route";
+import { txIdParam } from "@/lib/schemas/wallet";
+import { deleteTransaction } from "@/server/services/wallet.service";
 
-interface Params { params: { walletId: string; txId: string } }
+export const dynamic = "force-dynamic";
 
-// DELETE /api/wallet/[walletId]/tx/[txId]
-export async function DELETE(_req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session?.user?.id || !Types.ObjectId.isValid(session.user.id)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+type Params = { walletId: string; txId: string };
 
-  const { walletId, txId } = params;
-  if (!Types.ObjectId.isValid(walletId) || !Types.ObjectId.isValid(txId)) {
-    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
-  }
-
-  await dbConnect();
-  const userId = new Types.ObjectId(session.user.id);
-
-  const tx = await WalletTx.findOneAndDelete({ _id: txId, walletId, userId });
-  if (!tx) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  // Reverse the balance change on the wallet
-  const wallet = await Wallet.findOne({ _id: walletId, userId });
-  if (wallet) {
-    wallet.balance = tx.type === "credit"
-      ? wallet.balance - tx.amount
-      : wallet.balance + tx.amount;
-    await wallet.save();
-  }
-
-  return NextResponse.json({ success: true, newBalance: wallet?.balance ?? 0 });
-}
+export const DELETE = handler<Params>(async ({ userId, params }) => {
+  const { walletId, txId } = parseParams(params, txIdParam);
+  return deleteTransaction(userId, walletId, txId);
+});

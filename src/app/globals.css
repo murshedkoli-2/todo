@@ -2,310 +2,772 @@
 @tailwind components;
 @tailwind utilities;
 
-/* â”€â”€ Google Font â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap');
+/* ══════════════════════════════════════════════════════════════════════════
+   TaskFlow — "Statement" design system
+   Periwinkle canvas · editorial serif display · figures typeset as figures
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Design tokens: Dark (default)                       */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   Three ideas hold this together:
+
+   1. TYPE PAIRING. A serif display face against Inter's UI text creates
+      hierarchy from contrast rather than from size alone, and money gets its
+      own numeric treatment so an amount is recognisable before it is read.
+
+   2. ELEVATION TIERS. Flat / raised / floating, applied by role. Everything
+      previously sat at one shadow height, which flattened the whole product.
+
+   3. RADIUS BY ROLE. panel > card > control > pill, rather than one radius
+      applied uniformly to every surface.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Design tokens: Light (default) ─────────────────────────────────────── */
 :root {
-  --bg-primary:      #0e1217;
-  --bg-secondary:    #161b22;
-  --bg-card:         #1c2128;
-  --bg-card-hover:   #21262d;
-  --bg-input:        #0e1217;
+  /* Surfaces */
+  --bg-primary:      #e8ebfa;   /* app canvas (periwinkle wash)   */
+  --bg-secondary:    #ffffff;   /* sidebar / top bar              */
+  --bg-content:      #f6f7fd;   /* scroll region behind cards     */
+  --bg-card:         #ffffff;
+  --bg-card-hover:   #fbfcff;
+  --bg-sunken:       #f3f5fc;   /* inputs, wells, tracks          */
+  --bg-input:        #f3f5fc;
+
+  /* Lines */
+  --border:          #e6e9f6;
+  --border-hover:    #d2d8ef;
+  --border-focus:    rgba(79,94,232,0.55);
+
+  /* Type */
+  --text-primary:    #181c36;
+  --text-secondary:  #616a90;
+  --text-muted:      #99a0bd;
+
+  /* Brand */
+  --accent:          #4f5ee8;
+  --accent-hover:    #4050d9;
+  --accent-dim:      rgba(79,94,232,0.10);
+  --accent-soft:     #ecedfe;
+
+  /* Semantic — `*` fills shapes, `*-soft` tints a surface */
+  --green:           #2fb96b;
+  --green-soft:      rgba(47,185,107,0.12);
+  --yellow:          #eda32b;
+  --yellow-soft:     rgba(237,163,43,0.13);
+  --orange:          #f4772c;
+  --red:             #e8495c;
+  --red-soft:        rgba(232,73,92,0.11);
+  --purple:          #7c5cf0;
+  --purple-soft:     rgba(124,92,240,0.12);
+
+  /*
+   * `*-ink` is the text counterpart: the vivid fills above drop to ~1.6:1 on
+   * their own pale tints, so labels sitting on a soft surface use these
+   * darkened variants instead (all >= 4.5:1 over the matching tint).
+   */
+  --accent-ink:      #3f49cf;
+  --green-ink:       #12703f;
+  --yellow-ink:      #7a5000;
+  --orange-ink:      #8f4104;
+  --red-ink:         #bf1f31;
+  --purple-ink:      #5b39c4;
+
+  /*
+   * `--on-*` is the mirror of `*-ink`: the colour to print *on top of* a fully
+   * saturated fill, where `*-ink` is for text on that colour's pale tint.
+   *
+   * White is not a safe default here. Measured against these fills it lands at
+   * 2.1:1 (yellow) to 3.8:1 (red) — so a solid avatar or a filled badge was
+   * failing AA for everything except accent. Only accent and purple are dark
+   * enough in this theme to carry white text; the rest take the near-black.
+   */
+  --on-accent:       #ffffff;   /* 5.12:1 */
+  --on-purple:       #ffffff;   /* 4.52:1 */
+  --on-green:        #0a0c18;   /* 7.67:1 */
+  --on-yellow:       #0a0c18;   /* 9.15:1 */
+  --on-orange:       #0a0c18;   /* 6.97:1 */
+  --on-red:          #0a0c18;   /* 5.13:1 */
+
+  /* Elevation — soft, indigo-tinted */
+  --shadow-xs:       0 1px 2px rgba(24,28,54,0.05);
+  --shadow-card:     0 1px 2px rgba(24,28,54,0.04), 0 6px 16px -10px rgba(24,28,54,0.18);
+  --shadow-card-hover: 0 2px 4px rgba(24,28,54,0.05), 0 16px 32px -16px rgba(24,28,54,0.28);
+  --shadow-popup:    0 8px 28px -8px rgba(24,28,54,0.24);
+  --shadow-modal:    0 24px 64px -20px rgba(24,28,54,0.35);
+  --shadow-rail:     1px 0 0 rgba(24,28,54,0.05);
+
+  /* Overlays */
+  --overlay-bg:      rgba(24,28,54,0.42);
+  --hover-overlay:   rgba(79,94,232,0.06);
+  --active-overlay:  rgba(79,94,232,0.11);
+
+  /* Geometry — applied by role, not uniformly */
+  --radius-panel:    20px;
+  --radius-card:     14px;
+  --radius-well:     12px;
+  --radius-control:  10px;
+  --sidebar-w:       248px;
+
+  /*
+   * Elevation tiers. `flat` is a hairline only — used for statement rows,
+   * which should read as ruled lines rather than as floating cards.
+   */
+  --elevation-flat:     none;
+  --elevation-raised:   var(--shadow-card);
+  --elevation-floating: var(--shadow-popup);
+
+  /* Hairline used to rule flat lists. */
+  --rule: 1px solid var(--border);
+}
+
+/* ── Design tokens: Dark ────────────────────────────────────────────────── */
+html:not(.light) {
+  --bg-primary:      #0a0c18;
+  --bg-secondary:    #11142a;
+  --bg-content:      #0d1022;
+  --bg-card:         #151932;
+  --bg-card-hover:   #1b2040;
+  --bg-sunken:       #0f1226;
+  --bg-input:        #0f1226;
+
   --border:          rgba(255,255,255,0.08);
   --border-hover:    rgba(255,255,255,0.16);
-  --border-focus:    rgba(68,147,248,0.7);
-  --text-primary:    #e6edf3;
-  --text-secondary:  #8b949e;
-  --text-muted:      #484f58;
-  --accent:          #4493f8;
-  --accent-hover:    #58a6ff;
-  --accent-dim:      rgba(68,147,248,0.15);
-  --green:           #3fb950;
-  --yellow:          #e3b341;
-  --orange:          #f0883e;
-  --red:             #f85149;
-  --purple:          #bc8cff;
-  --shadow-card:     0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.3);
-  --shadow-card-hover: 0 8px 32px rgba(0,0,0,0.5);
-  --shadow-popup:    0 8px 32px rgba(0,0,0,0.55);
-  --shadow-modal:    0 24px 64px rgba(0,0,0,0.65);
-  --overlay-bg:      rgba(0,0,0,0.72);
+  --border-focus:    rgba(124,138,255,0.65);
+
+  --text-primary:    #e8ebfa;
+  --text-secondary:  #9ba2c6;
+  --text-muted:      #666d93;
+
+  --accent:          #7c8aff;
+  --accent-hover:    #929dff;
+  --accent-dim:      rgba(124,138,255,0.16);
+  --accent-soft:     rgba(124,138,255,0.14);
+
+  --green:           #3ecf82;
+  --green-soft:      rgba(62,207,130,0.15);
+  --yellow:          #f0b13f;
+  --yellow-soft:     rgba(240,177,63,0.15);
+  --orange:          #ff8a4c;
+  --red:             #ff6274;
+  --red-soft:        rgba(255,98,116,0.14);
+  --purple:          #a68cff;
+  --purple-soft:     rgba(166,140,255,0.15);
+
+  /* On dark surfaces the vivid fills already clear 4.5:1, so ink mostly matches
+     them; accent is nudged brighter to clear AA on its own dim badge. */
+  --accent-ink:      #8f9aff;
+  --green-ink:       #3ecf82;
+  --yellow-ink:      #f0b13f;
+  --orange-ink:      #ff8a4c;
+  --red-ink:         #ff6274;
+  --purple-ink:      #a68cff;
+
+  /*
+   * Every fill in this theme is a pastel, so the near-black carries all six —
+   * 6.4:1 (accent) to 10.3:1 (yellow). White would be 1.9:1–3.0:1, which is
+   * why the filled controls needed a token rather than a literal `#fff`.
+   */
+  --on-accent:       #0a0c18;
+  --on-purple:       #0a0c18;
+  --on-green:        #0a0c18;
+  --on-yellow:       #0a0c18;
+  --on-orange:       #0a0c18;
+  --on-red:          #0a0c18;
+
+  --shadow-xs:       0 1px 2px rgba(0,0,0,0.4);
+  --shadow-card:     0 1px 2px rgba(0,0,0,0.35), 0 8px 20px -12px rgba(0,0,0,0.7);
+  --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.4), 0 18px 36px -18px rgba(0,0,0,0.85);
+  --shadow-popup:    0 10px 32px -8px rgba(0,0,0,0.7);
+  --shadow-modal:    0 28px 72px -20px rgba(0,0,0,0.8);
+  --shadow-rail:     1px 0 0 rgba(255,255,255,0.06);
+
+  --overlay-bg:      rgba(4,6,16,0.7);
   --hover-overlay:   rgba(255,255,255,0.05);
-  --active-overlay:  rgba(255,255,255,0.08);
+  --active-overlay:  rgba(255,255,255,0.09);
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Design tokens: Light                                */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* ────────────────────────────────────────────────── */
-html.light {
-  --bg-primary:      #f6f8fa;
-  --bg-secondary:    #ffffff;
-  --bg-card:         #ffffff;
-  --bg-card-hover:   #f0f3f6;
-  --bg-input:        #f6f8fa;
-  --border:          rgba(0,0,0,0.09);
-  --border-hover:    rgba(0,0,0,0.18);
-  --border-focus:    rgba(9,105,218,0.6);
-  --text-primary:    #1c2128;
-  --text-secondary:  #57606a;
-  --text-muted:      #a8b1ba;
-  --accent:          #0969da;
-  --accent-hover:    #0550ae;
-  --accent-dim:      rgba(9,105,218,0.12);
-  --green:           #1a7f37;
-  --yellow:          #bf8700;
-  --orange:          #bc4c00;
-  --red:             #cf222e;
-  --purple:          #8250df;
-  --shadow-card:     0 1px 3px rgba(0,0,0,0.08), 0 1px 8px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.12);
-  --shadow-popup:    0 8px 24px rgba(0,0,0,0.14);
-  --shadow-modal:    0 16px 48px rgba(0,0,0,0.18);
-  --overlay-bg:      rgba(0,0,0,0.45);
-  --hover-overlay:   rgba(0,0,0,0.04);
-  --active-overlay:  rgba(0,0,0,0.07);
+/* ── Base ───────────────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  background-color: var(--bg-primary);
 }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Base                                                */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-html { scroll-behavior: smooth; }
 
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* â”€â”€ Smooth theme transition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-*, *::before, *::after {
-  transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity;
-  transition-duration: 180ms;
-  transition-timing-function: ease;
-}
-/* Don't transition animations â€” causes jitter */
-.animate-fade-in-up, .animate-fade-in, .animate-scale-in {
-  transition: none;
+/*
+ * Interaction transitions are declared per component rather than on `*`, so
+ * only things that actually respond to hover/focus pay for them.
+ */
+.btn-primary, .btn-secondary, .btn-outline, .btn-ghost, .btn-danger, .btn-icon,
+.input-dark, .nav-item, .chip, .avatar-badge, .avatar-ring {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* â”€â”€ Custom scrollbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-secondary); }
-::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+/*
+ * Browsers do not re-target a running colour transition when the `var()` behind
+ * it resolves to a new value, which leaves elements painted in the outgoing
+ * theme. `ThemeContext` sets this class for one frame around the switch so every
+ * token lands instantly, then restores the normal transitions.
+ */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
 
-/* â”€â”€ Focus ring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: content-box; }
+
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-/* ── Touch: instant tap on mobile ──────────────────────── */
 button, a, [role="button"] {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── Safe area insets (iOS notch / home indicator) ──────── */
+/* Safe-area helpers (iOS notch / home indicator) */
 .safe-top    { padding-top:    env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .pb-safe     { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 
+/* ── Typography scale ───────────────────────────────────────────────────── */
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Status strips                                       */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.status-strip-todo        { background: var(--accent); }
-.status-strip-in_progress { background: var(--yellow); }
-.status-strip-completed   { background: var(--green); }
-.status-strip-overdue     { background: var(--red); }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Status badges                                       */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.badge-todo {
-  background: rgba(68,147,248,0.15);
-  color: #58a6ff;
-  border: 1px solid rgba(68,147,248,0.3);
-}
-.badge-in_progress {
-  background: rgba(227,179,65,0.15);
-  color: #e3b341;
-  border: 1px solid rgba(227,179,65,0.3);
-}
-.badge-completed {
-  background: rgba(63,185,80,0.15);
-  color: #3fb950;
-  border: 1px solid rgba(63,185,80,0.3);
-}
-.badge-overdue {
-  background: rgba(248,81,73,0.15);
-  color: #f85149;
-  border: 1px solid rgba(248,81,73,0.3);
-}
-
-/* Light-mode badge overrides */
-html.light .badge-todo        { background: rgba(9,105,218,0.10);  color: #0969da; border-color: rgba(9,105,218,0.25); }
-html.light .badge-in_progress { background: rgba(191,135,0,0.10);  color: #bf8700; border-color: rgba(191,135,0,0.25); }
-html.light .badge-completed   { background: rgba(26,127,55,0.10);  color: #1a7f37; border-color: rgba(26,127,55,0.25); }
-html.light .badge-overdue     { background: rgba(207,34,46,0.10);  color: #cf222e; border-color: rgba(207,34,46,0.25); }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Stat cards                                          */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.stat-todo        { background: linear-gradient(135deg, rgba(68,147,248,0.12) 0%, rgba(68,147,248,0.04) 100%); border-color: rgba(68,147,248,0.22); }
-.stat-in_progress { background: linear-gradient(135deg, rgba(227,179,65,0.12) 0%, rgba(227,179,65,0.04) 100%); border-color: rgba(227,179,65,0.22); }
-.stat-completed   { background: linear-gradient(135deg, rgba(63,185,80,0.12) 0%, rgba(63,185,80,0.04) 100%);   border-color: rgba(63,185,80,0.22); }
-.stat-overdue     { background: linear-gradient(135deg, rgba(248,81,73,0.12) 0%, rgba(248,81,73,0.04) 100%);   border-color: rgba(248,81,73,0.22); }
-
-/* Light-mode stat overrides */
-html.light .stat-todo        { background: linear-gradient(135deg, rgba(9,105,218,0.09) 0%, rgba(9,105,218,0.03) 100%);  border-color: rgba(9,105,218,0.2); }
-html.light .stat-in_progress { background: linear-gradient(135deg, rgba(191,135,0,0.09) 0%, rgba(191,135,0,0.03) 100%);  border-color: rgba(191,135,0,0.2); }
-html.light .stat-completed   { background: linear-gradient(135deg, rgba(26,127,55,0.09) 0%, rgba(26,127,55,0.03) 100%);  border-color: rgba(26,127,55,0.2); }
-html.light .stat-overdue     { background: linear-gradient(135deg, rgba(207,34,46,0.09) 0%, rgba(207,34,46,0.03) 100%);  border-color: rgba(207,34,46,0.2); }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Animations                                          */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position: 200% 0; }
-}
-
-.animate-fade-in-up { animation: fadeInUp 0.28s ease both; }
-.animate-fade-in    { animation: fadeIn 0.22s ease both; }
-.animate-scale-in   { animation: scaleIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
-
-/* Stagger helper â€” apply via inline style animationDelay */
-.animate-stagger > * { animation: fadeInUp 0.28s ease both; }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Input                                               */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.input-dark {
-  @apply w-full px-4 py-2.5 rounded-lg text-sm;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+/*
+ * Page and section titles use the serif. Its contrast against Inter is what
+ * carries hierarchy here — the previous scale relied on size and weight alone,
+ * which is why every surface read at the same volume.
+ */
+.text-display {
+  font-family: var(--font-display), 'Instrument Serif', Georgia, serif;
+  font-size: clamp(2rem, 1.5rem + 2.2vw, 2.875rem);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
   color: var(--text-primary);
 }
-.input-dark::placeholder { color: var(--text-muted); }
-.input-dark:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+.text-section {
+  font-family: var(--font-display), 'Instrument Serif', Georgia, serif;
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--text-primary);
 }
-.input-dark option { background: var(--bg-card); color: var(--text-primary); }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Buttons                                             */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.btn-primary {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm select-none;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+.text-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
-.btn-primary:active:not(:disabled) { transform: scale(0.97); }
-.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.text-meta {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
 
-.btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm select-none;
+/* ── Money ──────────────────────────────────────────────────────────────── */
+
+/*
+ * Figures get their own typographic system so an amount is identifiable
+ * before it is read: lining tabular numerals (columns align, digits share a
+ * width), tightened tracking, and a heavier weight than surrounding text.
+ */
+.money {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1, "ss01" 1;
+  letter-spacing: -0.015em;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.money-hero {
+  font-size: clamp(2rem, 1.5rem + 2.4vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.money-lg  { font-size: 1.375rem; letter-spacing: -0.025em; }
+.money-md  { font-size: 1rem; }
+.money-sm  { font-size: 0.8125rem; }
+
+.money-positive { color: var(--green-ink); }
+.money-negative { color: var(--red-ink); }
+.money-neutral  { color: var(--text-primary); }
+
+/* ── Flat statement rows ────────────────────────────────────────────────── */
+
+/*
+ * Ledger and wallet histories are statements, not galleries. Hairline-ruled
+ * rows put the figures in a single right-aligned column the eye can scan;
+ * a grid of cards makes comparing two balances a hunt.
+ */
+.statement {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--elevation-raised);
+  overflow: hidden;
+}
+.statement-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  text-align: left;
   background: transparent;
-  border: 1px solid var(--border-hover);
-  color: var(--text-secondary);
+  border-bottom: var(--rule);
+  transition: background-color 140ms ease;
 }
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
+.statement-row:last-child { border-bottom: none; }
+.statement-row:hover { background: var(--hover-overlay); }
+.statement-row:active { background: var(--active-overlay); }
+
+/* Sticky column header for a statement. */
+.statement-head {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.625rem 1.25rem;
+  background: var(--bg-sunken);
+  border-bottom: var(--rule);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 px-4 h-10 text-sm font-semibold select-none;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 1px 2px rgba(24,28,54,0.12), 0 6px 16px -8px var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 4px rgba(24,28,54,0.14), 0 10px 22px -8px var(--accent);
+}
+.btn-primary:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--shadow-xs); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+/* Outlined "Add Client"-style button from the reference */
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 px-4 h-10 text-sm font-semibold select-none;
+  border-radius: var(--radius-control);
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
   color: var(--accent);
-  background: var(--accent-dim);
 }
-.btn-secondary:active:not(:disabled) { transform: scale(0.97); }
+.btn-secondary:hover:not(:disabled) { background: var(--accent-soft); }
+.btn-secondary:active:not(:disabled) { transform: translateY(1px); }
 .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-ghost {
-  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium select-none;
+/* Neutral outlined control (Sort by, Cancel, view toggles) */
+.btn-outline {
+  @apply inline-flex items-center justify-center gap-2 px-3.5 h-10 text-sm font-medium select-none;
+  border-radius: var(--radius-control);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
+  box-shadow: var(--shadow-xs);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--border-hover); color: var(--text-primary); }
+.btn-outline:active:not(:disabled) { transform: translateY(1px); }
+.btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-1.5 px-3 h-9 text-sm font-medium select-none;
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  background: transparent;
 }
 .btn-ghost:hover:not(:disabled) { background: var(--hover-overlay); color: var(--text-primary); }
 .btn-ghost:active:not(:disabled) { background: var(--active-overlay); }
 .btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-danger {
-  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium select-none;
-  color: var(--red);
+  @apply inline-flex items-center justify-center gap-2 px-4 h-10 text-sm font-semibold select-none;
+  border-radius: var(--radius-control);
+  background: var(--red-soft);
+  color: var(--red-ink);
+  border: 1px solid transparent;
 }
-.btn-danger:hover:not(:disabled) { background: rgba(248,81,73,0.10); }
-html.light .btn-danger:hover:not(:disabled) { background: rgba(207,34,46,0.10); }
-.btn-danger:active:not(:disabled) { transform: scale(0.97); }
+.btn-danger:hover:not(:disabled) { border-color: var(--red); }
+.btn-danger:active:not(:disabled) { transform: translateY(1px); }
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Cards                                               */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Square icon button (the ⋮ / grid-toggle in the reference toolbar) */
+.btn-icon {
+  @apply inline-flex items-center justify-center flex-shrink-0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-control);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-xs);
+}
+.btn-icon:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.btn-icon:active:not(:disabled) { transform: translateY(1px); }
+.btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Form controls ──────────────────────────────────────────────────────── */
+.input-dark {
+  @apply w-full px-3.5 text-sm;
+  height: 2.5rem;
+  border-radius: var(--radius-control);
+  background: var(--bg-sunken);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+}
+textarea.input-dark { height: auto; @apply py-2.5; }
+.input-dark::placeholder { color: var(--text-muted); }
+.input-dark:hover:not(:focus) { background: var(--bg-card-hover); border-color: var(--border); }
+.input-dark:focus {
+  outline: none;
+  background: var(--bg-card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.input-dark option { background: var(--bg-card); color: var(--text-primary); }
+.input-dark[type="date"] { color-scheme: light; }
+html:not(.light) .input-dark[type="date"] { color-scheme: dark; }
+
+.field-label {
+  @apply block text-xs font-semibold mb-1.5;
+  color: var(--text-secondary);
+}
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
 }
-.card:hover { box-shadow: var(--shadow-card-hover); }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Modal                                               */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Interactive grid card — the core object from the reference */
+.card-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  width: 100%;
+  padding: 1.125rem 1.25rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: transform 180ms cubic-bezier(0.16,1,0.3,1), box-shadow 180ms ease, border-color 160ms ease;
+}
+.card-tile:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-card-hover);
+}
+.card-tile:active { transform: translateY(-1px); }
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--elevation-raised);
+  padding: 1.5rem;
+}
+
+/*
+ * Hero surface for the single number that matters on a page (net position,
+ * total balance). Deliberately the only place a gradient wash appears, so it
+ * reads as the page's focal point rather than as decoration.
+ */
+.panel-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-card);
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 10%, var(--bg-card)) 0%,
+    var(--bg-card) 55%
+  );
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--elevation-raised);
+}
+
+.well {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-well);
+}
+
+/* ── Progress bar (green track from the reference cards) ────────────────── */
+.progress-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+html:not(.light) .progress-track { background: rgba(255,255,255,0.08); }
+.progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--green);
+  transition: width 420ms cubic-bezier(0.16,1,0.3,1);
+}
+
+/* ── Avatar / logo badge ────────────────────────────────────────────────── */
+.avatar-badge {
+  @apply inline-flex items-center justify-center flex-shrink-0 font-bold select-none;
+  border-radius: 10px;
+}
+.avatar-ring {
+  @apply inline-flex items-center justify-center flex-shrink-0 font-semibold select-none rounded-full;
+  border: 2px solid var(--bg-card);
+}
+
+/* ── Pills & badges ─────────────────────────────────────────────────────── */
+.pill {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold;
+}
+
+.badge-todo        { background: var(--accent-dim);  color: var(--accent-ink); }
+.badge-in_progress { background: var(--yellow-soft); color: var(--yellow-ink); }
+.badge-completed   { background: var(--green-soft);  color: var(--green-ink); }
+.badge-overdue     { background: var(--red-soft);    color: var(--red-ink); }
+
+/* Filter chip row */
+.chip {
+  @apply inline-flex flex-shrink-0 items-center gap-1.5 px-3.5 h-8 rounded-full text-xs font-semibold;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+.chip:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.chip[data-active="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+/* ── Sidebar navigation ─────────────────────────────────────────────────── */
+.nav-item {
+  @apply relative flex items-center gap-3 h-11 pl-5 pr-3 text-sm font-medium;
+  color: var(--text-secondary);
+}
+.nav-item:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.nav-item[data-active="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+/* Left indicator bar, exactly like the reference's active nav row */
+.nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
 .modal-overlay {
-  @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+  @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal-box {
+  @apply w-full sm:max-w-lg overflow-hidden animate-scale-in;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  box-shadow: var(--shadow-modal);
+}
+@media (min-width: 640px) {
+  .modal-box { border-radius: 20px; }
+}
+
+/* ── Alerts ─────────────────────────────────────────────────────────────── */
+.alert-error {
+  @apply flex items-start gap-2.5 px-4 py-3 text-sm;
+  border-radius: var(--radius-well);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.alert-success {
+  @apply flex items-start gap-2.5 px-4 py-3 text-sm;
+  border-radius: var(--radius-well);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+@keyframes fadeInUp   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn     { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn    { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slideInLeft{ from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer    { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+.animate-fade-in-up    { animation: fadeInUp 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-fade-in       { animation: fadeIn 0.22s ease both; }
+.animate-scale-in      { animation: scaleIn 0.24s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-slide-in-left { animation: slideInLeft 0.26s cubic-bezier(0.16,1,0.3,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-tile:hover { transform: none; }
+}
+
+/* ── Utilities ──────────────────────────────────────────────────────────── */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-sunken) 25%, var(--bg-card-hover) 50%, var(--bg-sunken) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ── Toasts ─────────────────────────────────────────────────────────────── */
+
+/*
+ * Replaces the inline `alert-error` block that used to sit at the top of the
+ * page: a mutation failure that happens after the user has scrolled was
+ * previously reported somewhere they could not see.
+ */
+.toast-viewport {
+  position: fixed;
+  z-index: 80;
+  bottom: max(5.5rem, calc(env(safe-area-inset-bottom) + 5.5rem));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  width: min(26rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+@media (min-width: 1024px) {
+  .toast-viewport { bottom: 1.5rem; left: auto; right: 1.5rem; transform: none; }
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-well);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--elevation-floating);
+  pointer-events: auto;
+  animation: toastIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.toast[data-leaving="true"] { animation: toastOut 160ms ease both; }
+.toast[data-tone="error"]   { border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.toast[data-tone="success"] { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+
+@keyframes toastIn  { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(6px) scale(0.98); } }
+
+/* ── Command palette ────────────────────────────────────────────────────── */
+.palette-overlay {
+  @apply fixed inset-0 z-[70] flex items-start justify-center px-4 pt-[12vh];
   background: var(--overlay-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-.modal-box {
-  @apply w-full max-w-lg rounded-2xl overflow-hidden animate-scale-in;
+.palette-box {
+  width: min(38rem, 100%);
   background: var(--bg-card);
-  border: 1px solid var(--border-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-modal);
+  overflow: hidden;
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background: transparent;
+}
+.palette-item[data-active="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* Keyboard hint chip. */
+.kbd {
+  @apply inline-flex items-center justify-center px-1.5 h-5 rounded text-[10px] font-semibold;
+  min-width: 1.25rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Utility: visually hide scrollbar but keep scrolling */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* ── Kanban board ───────────────────────────────────────────────────────── */
+.board-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
 }
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Skeleton loading shimmer                            */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.skeleton {
-  background: linear-gradient(90deg,
-    var(--bg-card) 25%,
-    var(--bg-card-hover) 50%,
-    var(--bg-card) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 6px;
+/* Highlighted while a card is dragged over it. */
+.board-column[data-drop-target="true"] {
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
+.board-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--elevation-raised);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms ease;
+}
+.board-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+.board-card[data-dragging="true"] { opacity: 0.45; transform: rotate(-1.2deg); }
 
+/* Screen-reader-only, but focusable — used by the skip link. */
+.sr-only-focusable:not(:focus):not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

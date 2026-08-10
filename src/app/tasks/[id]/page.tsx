@@ -2,53 +2,49 @@ import { auth } from "@/auth";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import dbConnect from "@/lib/dbConnect";
-import TodoModel from "@/models/Todo";
-import { Todo } from "@/lib/types";
+import { getTodo } from "@/server/services/todo.service";
+import { NotFoundError } from "@/lib/api/errors";
+import type { TodoDTO } from "@/lib/dto/todo";
 import TaskView from "@/components/TaskView";
 
 interface Props {
   params: { id: string };
 }
 
-async function getTodo(id: string): Promise<Todo | null> {
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
+/**
+ * Loads the task, scoped to the signed-in user.
+ *
+ * The previous version fetched by id alone and compared ownership afterwards;
+ * the service filters on `userId` in the query itself, so another user's task
+ * is never read into memory in the first place.
+ */
+async function loadTodo(id: string, userId: string): Promise<TodoDTO | null> {
+  if (!OBJECT_ID.test(id)) return null;
   try {
     await dbConnect();
-    const raw = await TodoModel.findById(id).lean();
-    if (!raw) return null;
-    return {
-      _id:             raw._id.toString(),
-      title:           raw.title,
-      description:     raw.description,
-      status:          raw.status as Todo["status"],
-      dueDate:         raw.dueDate ? raw.dueDate.toISOString() : null,
-      createdAt:       (raw.createdAt as Date).toISOString(),
-      updatedAt:       (raw.updatedAt as Date).toISOString(),
-      userId:          raw.userId.toString(),
-      ownerName:       "Me",
-      images:          (raw.images as string[]) ?? [],
-      featureImage:    (raw.featureImage as string | undefined) ?? null,
-      paymentAmount:   (raw.paymentAmount as number | undefined) ?? null,
-      paymentCurrency: (raw.paymentCurrency as string) ?? "BDT",
-      paymentStatus:   ((raw.paymentStatus as string) ?? "unpaid") as Todo["paymentStatus"],
-    };
-  } catch {
-    return null;
+    return await getTodo(userId, id);
+  } catch (error) {
+    if (error instanceof NotFoundError) return null;
+    throw error;
   }
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const todo = await getTodo(params.id);
-  return {
-    title: todo ? `${todo.title} — TaskFlow` : "Task Details — TaskFlow",
-  };
+  const session = await auth();
+  if (!session?.user?.id) return { title: "Task Details — TaskFlow" };
+
+  const todo = await loadTodo(params.id, session.user.id);
+  return { title: todo ? `${todo.title} — TaskFlow` : "Task Details — TaskFlow" };
 }
 
 export default async function TaskDetailPage({ params }: Props) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const todo = await getTodo(params.id);
-  if (!todo || todo.userId !== session.user.id) notFound();
+  const todo = await loadTodo(params.id, session.user.id);
+  if (!todo) notFound();
 
   return <TaskView todo={todo} />;
 }

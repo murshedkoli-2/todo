@@ -1,101 +1,94 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { handler } from "@/lib/api/route";
+import { BadRequestError, UpstreamError } from "@/lib/api/errors";
+import { detectImageType } from "@/lib/imageType";
+import { enforceRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-  "image/bmp",
-];
-const MAX_SIZE_MB = 5;
+const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-export async function POST(request: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+/** Uploads are the most expensive authenticated endpoint, so they get a cap. */
+const UPLOAD_LIMIT = { limit: 40, windowMs: 60 * 60_000 };
+
+interface ImgBbResponse {
+  success?: boolean;
+  error?: { message?: string };
+  data?: {
+    display_url?: string;
+    delete_url?: string;
+    thumb?: { url?: string };
+  };
+}
+
+export const POST = handler(
+  async ({ userId, request }) => {
+    await enforceRateLimit(`upload:${userId}`, UPLOAD_LIMIT);
 
     const apiKey = process.env.IMGBB_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "ImgBB API key not configured" },
-        { status: 500 }
-      );
-    }
+    if (!apiKey) throw new UpstreamError("Image hosting is not configured.");
 
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const file = formData.get("file");
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: "Invalid file type. Only JPEG, PNG, WebP, GIF, AVIF, and BMP are allowed." },
-        { status: 400 }
+    if (!(file instanceof File)) throw new BadRequestError("No file provided");
+    if (file.size === 0) throw new BadRequestError("File is empty");
+    if (file.size > MAX_SIZE_BYTES) {
+      throw new BadRequestError(
+        `File too large. Maximum size is ${MAX_SIZE_BYTES / 1024 / 1024} MB.`
       );
     }
 
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      return NextResponse.json(
-        { error: `File too large. Maximum size is ${MAX_SIZE_MB} MB.` },
-        { status: 400 }
-      );
-    }
-
-    // Convert file to base64 for ImgBB API
     const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString("base64");
 
-    // Upload to ImgBB
+    // Sniffed rather than trusting `file.type`, which the client sets freely.
+    const detected = detectImageType(bytes);
+    if (!detected) {
+      throw new BadRequestError(
+        "That file is not a supported image. Use JPEG, PNG, WebP, GIF, AVIF, or BMP."
+      );
+    }
+
     const imgbbForm = new FormData();
     imgbbForm.append("key", apiKey);
-    imgbbForm.append("image", base64);
-    // Use original filename without extension as the image name
-    const name = file.name.replace(/\.[^/.]+$/, "").slice(0, 100);
-    if (name) imgbbForm.append("name", name);
+    imgbbForm.append("image", Buffer.from(bytes).toString("base64"));
 
-    const imgbbRes = await fetch("https://api.imgbb.com/1/upload", {
-      method: "POST",
-      body: imgbbForm,
-    });
+    // Strip the extension and any path separators before echoing the name back.
+    const safeName = file.name
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^\w\-. ]/g, "")
+      .slice(0, 100)
+      .trim();
+    if (safeName) imgbbForm.append("name", safeName);
 
-    if (!imgbbRes.ok) {
-      const errText = await imgbbRes.text();
-      console.error("ImgBB upload failed:", errText);
-      return NextResponse.json(
-        { error: "Image upload to ImgBB failed. Please try again." },
-        { status: 502 }
-      );
+    let payload: ImgBbResponse;
+    try {
+      const response = await fetch("https://api.imgbb.com/1/upload", {
+        method: "POST",
+        body: imgbbForm,
+        signal: AbortSignal.timeout(30_000),
+      });
+      payload = (await response.json()) as ImgBbResponse;
+      if (!response.ok || !payload.success) {
+        console.error("ImgBB upload rejected:", payload.error?.message ?? response.status);
+        throw new UpstreamError("Image upload failed. Please try again.");
+      }
+    } catch (error) {
+      if (error instanceof UpstreamError) throw error;
+      console.error("ImgBB upload error:", error);
+      throw new UpstreamError("Image upload failed. Please try again.");
     }
 
-    const imgbbData = await imgbbRes.json();
+    const url = payload.data?.display_url;
+    if (!url) throw new UpstreamError("Image host returned no URL.");
 
-    if (!imgbbData.success) {
-      console.error("ImgBB returned failure:", imgbbData);
-      return NextResponse.json(
-        { error: imgbbData.error?.message || "ImgBB upload failed." },
-        { status: 502 }
-      );
-    }
-
-    // Return the direct display URL and optional delete URL
-    return NextResponse.json(
-      {
-        url:        imgbbData.data.display_url as string,
-        deleteUrl:  imgbbData.data.delete_url  as string,
-        thumbUrl:   imgbbData.data.thumb?.url  as string | undefined,
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("POST /api/upload error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+    return {
+      url,
+      // ImgBB's delete link is a browser page, not an API endpoint, so it is
+      // returned for the user rather than called programmatically. Uploaded
+      // images stay publicly reachable by URL — see README.
+      deleteUrl: payload.data?.delete_url,
+      thumbUrl: payload.data?.thumb?.url,
+    };
+  },
+  { status: 201 }
+);

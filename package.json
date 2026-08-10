@@ -7,10 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:public": "playwright test --project=public",
+    "verify": "npm run type-check && npm run lint && npm run test:coverage && npm run build",
+    "gen:cover": "node scripts/generate-default-cover.mjs",
+    "migrate:money": "node scripts/migrate-money.mjs",
+    "migrate:money:dry": "node scripts/migrate-money.mjs --dry-run"
   },
   "dependencies": {
-    "@auth/mongodb-adapter": "^3.11.2",
     "bcryptjs": "^3.0.3",
     "mongodb": "^6.21.0",
     "mongoose": "^9.7.3",
@@ -18,18 +26,22 @@
     "next-auth": "^5.0.0-beta.31",
     "nodemailer": "^7.0.13",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }
