@@ -218,6 +218,34 @@ export const TrendDownIcon = (p: IconProps) => (
   <Icon strokeWidth={2} {...p}><path d="M3 7l6 6 4-4 8 8M15 17h6v-6" /></Icon>
 );
 
+export const OverviewIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3.5" y="3.5" width="7" height="8.5" rx="1.8" />
+    <rect x="13.5" y="3.5" width="7" height="5" rx="1.8" />
+    <rect x="3.5" y="15" width="7" height="5.5" rx="1.8" />
+    <rect x="13.5" y="11.5" width="7" height="9" rx="1.8" />
+  </Icon>
+);
+
+export const FlagIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 21V4.5" />
+    <path d="M5 5.5h9.5l-1.4 3.2 1.4 3.3H5" fill="currentColor" stroke="none" opacity="0.9" />
+    <path d="M5 5.5h9.5l-1.4 3.2 1.4 3.3H5" />
+  </Icon>
+);
+
+export const KeyboardIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
+    <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8" />
+  </Icon>
+);
+
+export const BoltIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12l1-8z" /></Icon>
+);
+
 export const SpinnerIcon = ({ className = "", ...p }: IconProps) => (
   <svg
     viewBox="0 0 24 24"

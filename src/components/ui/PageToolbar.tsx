@@ -17,11 +17,13 @@ interface PageToolbarProps {
   searchPlaceholder?: string;
   /** Debounced by 200 ms so typing does not re-render the grid on every key. */
   onSearchChange?: (value: string) => void;
-  sortOptions?: SortOption[];
+  sortOptions?: ReadonlyArray<SortOption>;
   sortValue?: string;
   onSortChange?: (value: string) => void;
   /** Buttons rendered at the far right of the toolbar. */
   actions?: React.ReactNode;
+  /** Lets a page focus the search field from a keyboard shortcut. */
+  searchRef?: React.RefObject<HTMLInputElement>;
 }
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -37,6 +39,7 @@ export default function PageToolbar({
   sortValue,
   onSortChange,
   actions,
+  searchRef,
 }: PageToolbarProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* Controlled locally so the field updates instantly while the parent is
@@ -86,6 +89,7 @@ export default function PageToolbar({
               style={{ color: "var(--text-muted)" }}
             />
             <input
+              ref={searchRef}
               type="search"
               value={draft}
               onChange={handleSearchInput}

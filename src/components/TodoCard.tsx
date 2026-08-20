@@ -1,10 +1,12 @@
 "use client";
 
 import {
-  Todo, DisplayStatus, getDisplayStatus, STATUS_LABELS,
+  Todo, getDisplayStatus, STATUS_LABELS,
   STATUS_COLORS, STATUS_TEXT_COLORS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TEXT_COLORS,
 } from "@/lib/types";
+import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
+import PriorityFlag from "@/components/ui/PriorityFlag";
 import Avatar from "@/components/ui/Avatar";
 import Money from "@/components/ui/Money";
 import TaskCover from "@/components/ui/TaskCover";
@@ -30,36 +32,6 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: TodoStatus; label: string }> = [
 
 /** Soft wash used behind the card's status header. */
 const statusTint = (color: string) => `color-mix(in srgb, ${color} 13%, transparent)`;
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  });
-}
-
-/**
- * Days until the due date. Negative when overdue — this is a real signal, and
- * it replaces the invented completion percentage the card used to show
- * (`in_progress` was hard-coded to 55%, which meant nothing to anyone).
- */
-function daysUntil(dueDate: string): number {
-  const MS_PER_DAY = 86_400_000;
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  const startOfDue = new Date(dueDate).setHours(0, 0, 0, 0);
-  return Math.round((startOfDue - startOfToday) / MS_PER_DAY);
-}
-
-function dueLabel(dueDate: string, displayStatus: DisplayStatus): string {
-  if (displayStatus === "completed") return formatDate(dueDate);
-  const days = daysUntil(dueDate);
-  if (days === 0) return "Due today";
-  if (days === 1) return "Due tomorrow";
-  if (days === -1) return "1 day late";
-  if (days < 0) return `${Math.abs(days)} days late`;
-  if (days <= 7) return `Due in ${days} days`;
-  return formatDate(dueDate);
-}
 
 export default function TodoCard({
   todo, onEdit, onView, onStatusChange, pending = false,
@@ -110,6 +82,8 @@ export default function TodoCard({
 
         <span className="flex-1" />
 
+        <PriorityFlag priority={todo.priority} className="flex-shrink-0" />
+
         <Avatar name={todo.ownerName} variant="square" size="sm" solid className="flex-shrink-0" />
       </header>
 
@@ -148,7 +122,7 @@ export default function TodoCard({
                 }}
               >
                 <CalendarIcon className="w-3.5 h-3.5" />
-                {dueLabel(todo.dueDate, displayStatus)}
+                {formatDueLabel(todo.dueDate, { relative: displayStatus !== "completed" })}
               </span>
             )}
 
@@ -173,11 +147,26 @@ export default function TodoCard({
                 tone="neutral"
                 compact
               />
+              {/* A part-paid task's useful number is the shortfall, not the
+                  word "partial" — the total is already printed beside it. */}
               <span
                 className="text-[11px] font-semibold uppercase tracking-wide flex-shrink-0"
                 style={{ color: PAYMENT_STATUS_TEXT_COLORS[todo.paymentStatus] }}
               >
-                {PAYMENT_STATUS_LABELS[todo.paymentStatus]}
+                {todo.paymentStatus === "partial" && todo.dueAmountMinor != null ? (
+                  <>
+                    <Money
+                      minor={todo.dueAmountMinor}
+                      currency={todo.paymentCurrency}
+                      size="sm"
+                      tone="inherit"
+                      compact
+                    />
+                    {" due"}
+                  </>
+                ) : (
+                  PAYMENT_STATUS_LABELS[todo.paymentStatus]
+                )}
               </span>
             </span>
           ) : (

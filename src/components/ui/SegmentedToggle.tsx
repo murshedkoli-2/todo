@@ -8,7 +8,7 @@ export interface Segment<T extends string> {
 }
 
 interface SegmentedToggleProps<T extends string> {
-  segments: Segment<T>[];
+  segments: ReadonlyArray<Segment<T>>;
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;

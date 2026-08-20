@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import SidebarNav from "@/components/shell/SidebarNav";
 import MobileTabBar from "@/components/shell/MobileTabBar";
 import Brand from "@/components/shell/Brand";
 import CommandPalette from "@/components/shell/CommandPalette";
+import ShortcutsHelp from "@/components/shell/ShortcutsHelp";
 import ThemeToggle from "@/components/ThemeToggle";
 import Avatar from "@/components/ui/Avatar";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { MenuIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { useHotkeys } from "@/hooks/useHotkeys";
+import { KeyboardIcon, MenuIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
 interface AppShellProps {
   /** Workspace label shown at the left of the top bar. */
@@ -30,9 +33,27 @@ function openPalette() {
  * tab bar below it. Pages render only their own content into `children`.
  */
 export default function AppShell({ workspace = "My Workspace", children }: AppShellProps) {
+  const router = useRouter();
   const { data: session } = useSession();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useFocusTrap<HTMLDivElement>(drawerOpen);
+
+  /* App-wide shortcuts. Page-specific ones (quick add, search) are bound by
+     the page that owns the control, so a shortcut can never point at a widget
+     that is not on screen. Every binding here is listed in `ShortcutsHelp`. */
+  useHotkeys(
+    useMemo(
+      () => [
+        { keys: "?", handler: () => window.dispatchEvent(new Event("taskflow:shortcuts")) },
+        { keys: "c", handler: () => router.push("/tasks/new") },
+        { keys: "g o", handler: () => router.push("/") },
+        { keys: "g t", handler: () => router.push("/tasks") },
+        { keys: "g l", handler: () => router.push("/ledger") },
+        { keys: "g w", handler: () => router.push("/wallet") },
+      ],
+      [router]
+    )
+  );
 
   /* Lock body scroll and allow Escape while the drawer is open. */
   useEffect(() => {
@@ -112,6 +133,15 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
             <kbd className="kbd">⌘K</kbd>
           </button>
 
+          <button
+            onClick={() => window.dispatchEvent(new Event("taskflow:shortcuts"))}
+            className="btn-icon hidden md:inline-flex"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+          >
+            <KeyboardIcon className="w-4 h-4" />
+          </button>
+
           <ThemeToggle />
 
           <Link
@@ -140,6 +170,7 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
 
       <MobileTabBar />
       <CommandPalette />
+      <ShortcutsHelp />
     </div>
   );
 }

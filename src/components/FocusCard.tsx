@@ -1,7 +1,11 @@
 "use client";
 
-import { Todo, STATUS_COLORS, STATUS_LABELS, getDisplayStatus } from "@/lib/types";
+import {
+  Todo, STATUS_COLORS, STATUS_LABELS, STATUS_TEXT_COLORS, getDisplayStatus,
+} from "@/lib/types";
+import { daysUntilDue } from "@/lib/dueDate";
 import Money from "@/components/ui/Money";
+import PriorityFlag from "@/components/ui/PriorityFlag";
 import { ArrowUpIcon, ClockIcon } from "@/components/ui/icons";
 
 interface FocusCardProps {
@@ -9,16 +13,9 @@ interface FocusCardProps {
   onOpen: (todo: Todo) => void;
 }
 
-const MS_PER_DAY = 86_400_000;
-
-function daysUntil(dueDate: string): number {
-  const startOfToday = new Date().setHours(0, 0, 0, 0);
-  const startOfDue = new Date(dueDate).setHours(0, 0, 0, 0);
-  return Math.round((startOfDue - startOfToday) / MS_PER_DAY);
-}
-
 function urgency(dueDate: string): { headline: string; tone: string } {
-  const days = daysUntil(dueDate);
+  const days = daysUntilDue(dueDate);
+  if (days === null) return { headline: "Due date unreadable", tone: "var(--text-muted)" };
   if (days < 0) {
     return {
       headline: days === -1 ? "1 day overdue" : `${Math.abs(days)} days overdue`,
@@ -57,11 +54,12 @@ export default function FocusCard({ todo, onOpen }: FocusCardProps) {
           Up next
         </span>
         <span className="flex-1" />
+        <PriorityFlag priority={todo.priority} className="flex-shrink-0" />
         <span
           className="pill"
           style={{
             background: `color-mix(in srgb, ${STATUS_COLORS[displayStatus]} 14%, transparent)`,
-            color: STATUS_COLORS[displayStatus],
+            color: STATUS_TEXT_COLORS[displayStatus],
           }}
         >
           {STATUS_LABELS[displayStatus]}

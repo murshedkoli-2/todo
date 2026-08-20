@@ -1,25 +1,34 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import dbConnect from "@/lib/dbConnect";
-import { listTodos } from "@/server/services/todo.service";
-import HomeClient from "@/components/HomeClient";
+import { listTodos, todoStatusCounts } from "@/server/services/todo.service";
+import { listAccounts } from "@/server/services/wallet.service";
+import { listPersons } from "@/server/services/ledger.service";
+import OverviewClient from "@/components/OverviewClient";
 
 export const dynamic = "force-dynamic";
 
-/** Upper bound on the initial payload; the client filters within it. */
-const INITIAL_PAGE_SIZE = 100;
-
-export default async function HomePage() {
-  // `middleware.ts` already gated this route; the session is re-read here for
-  // the user id, and the redirect is a defence-in-depth fallback.
+export default async function OverviewPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
+  const userId = session.user.id;
   await dbConnect();
-  const { todos } = await listTodos(session.user.id, {
-    page: 1,
-    limit: INITIAL_PAGE_SIZE,
-  });
 
-  return <HomeClient initialTodos={todos} />;
+  // Load all overview data concurrently
+  const [{ todos }, counts, accounts, persons] = await Promise.all([
+    listTodos(userId, { page: 1, limit: 10 }),
+    todoStatusCounts(userId),
+    listAccounts(userId),
+    listPersons(userId),
+  ]);
+
+  return (
+    <OverviewClient
+      initialTodos={todos}
+      taskCounts={counts}
+      initialAccounts={accounts}
+      initialPersons={persons}
+    />
+  );
 }

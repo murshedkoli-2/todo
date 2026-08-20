@@ -24,6 +24,28 @@ const instrumentSerif = Instrument_Serif({
   display: "swap",
 });
 
+/**
+ * Every route renders per request.
+ *
+ * `middleware.ts` applies a nonce-based CSP with `strict-dynamic` and no
+ * `unsafe-inline`. A nonce only exists once there is a request, so a
+ * statically prerendered page ships HTML with no nonce on any of its script
+ * tags — including the inline `self.__next_f` chunks React needs to hydrate —
+ * and the browser blocks every one of them. The page then renders its server
+ * markup and never becomes interactive.
+ *
+ * `/login`, `/register` and `/forgot-password` were prerendered and hit
+ * exactly that: in a production build the login form never appeared, because
+ * it sits behind a Suspense boundary that only resolves on the client. The
+ * failure is invisible in `next dev`, which does not prerender and allows
+ * `unsafe-inline`.
+ *
+ * Declaring it here rather than per page means a new route cannot reintroduce
+ * the bug by being static without anyone noticing. Nothing is lost: middleware
+ * already runs on every one of these routes, so none of them was cacheable.
+ */
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#e8ebfa" },

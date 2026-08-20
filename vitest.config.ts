@@ -21,6 +21,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      /*
+       * Scoped to the pure-logic modules this suite actually exercises. Adding
+       * a file here without a test for it lowers the reported number rather
+       * than raising it, which is the intended pressure — the thresholds below
+       * are a floor for code that claims to be covered, not a global average
+       * diluted by React components the Playwright suite owns.
+       */
       include: [
         "src/lib/money.ts",
         "src/lib/schemas/**",
@@ -28,6 +35,9 @@ export default defineConfig({
         "src/lib/imageType.ts",
         "src/lib/apiClient.ts",
         "src/lib/types.ts",
+        "src/lib/dueDate.ts",
+        "src/lib/quickAdd.ts",
+        "src/lib/payment.ts",
       ],
       thresholds: {
         lines: 80,

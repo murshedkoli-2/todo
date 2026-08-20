@@ -46,7 +46,71 @@ describe("toTodoDTO", () => {
     expect(dto.images).toEqual([]);
     expect(dto.paymentCurrency).toBe("BDT");
     expect(dto.paymentStatus).toBe("unpaid");
+    expect(dto.paymentMethod).toBe("unset");
     expect(dto.featureImage).toBeNull();
+  });
+
+  test("passes through a stored paid amount and derives what is due", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 1_350_000,
+      paidAmountMinor: 750_000,
+      paymentStatus: "partial",
+    });
+
+    expect(dto.paymentAmountMinor).toBe(1_350_000);
+    expect(dto.paidAmountMinor).toBe(750_000);
+    expect(dto.dueAmountMinor).toBe(600_000);
+  });
+
+  test("preserves a paid amount of zero rather than treating it as unset", () => {
+    const dto = toTodoDTO({ ...base, paymentAmountMinor: 5000, paidAmountMinor: 0 });
+
+    expect(dto.paidAmountMinor).toBe(0);
+    expect(dto.dueAmountMinor).toBe(5000);
+  });
+
+  /*
+   * Rows predating the paid column carry only a total and a hand-set status.
+   * Reading them back has to agree with what the user meant, or opening an old
+   * task would restate its payment on screen and then save that restatement.
+   */
+  test("infers a legacy settled row as fully paid, leaving nothing due", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 1_300_000,
+      paymentStatus: "paid",
+    });
+
+    expect(dto.paidAmountMinor).toBe(1_300_000);
+    expect(dto.dueAmountMinor).toBe(0);
+  });
+
+  test("infers a legacy unpaid row as nothing received, all of it due", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 1_300_000,
+      paymentStatus: "unpaid",
+    });
+
+    expect(dto.paidAmountMinor).toBe(0);
+    expect(dto.dueAmountMinor).toBe(1_300_000);
+  });
+
+  test("declines to invent a figure for a legacy partial row", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 1_300_000,
+      paymentStatus: "partial",
+    });
+
+    expect(dto.paidAmountMinor).toBeNull();
+    // The total is still owed as far as anything can tell; the form asks.
+    expect(dto.dueAmountMinor).toBe(1_300_000);
+  });
+
+  test("reports no due amount when there is no total to owe against", () => {
+    expect(toTodoDTO(base).dueAmountMinor).toBeNull();
   });
 });
 

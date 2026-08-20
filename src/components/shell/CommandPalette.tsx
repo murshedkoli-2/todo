@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeContext";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { NAV_SECTIONS } from "@/components/shell/navigation";
+import { api } from "@/lib/apiClient";
+import type { Todo } from "@/lib/types";
 import {
-  MoonIcon, PlusIcon, SearchIcon, SunIcon,
+  KeyboardIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TasksIcon,
 } from "@/components/ui/icons";
 
 interface Command {
@@ -15,7 +17,13 @@ interface Command {
   hint?: string;
   icon: React.ReactNode;
   run: () => void;
+  /** Task results are already server-filtered, so the local filter skips them. */
+  alwaysVisible?: boolean;
 }
+
+/** Enough to fill the list without turning the palette into a browse view. */
+const TASK_RESULT_LIMIT = 6;
+const TASK_SEARCH_DEBOUNCE_MS = 180;
 
 /** Case-insensitive subsequence match, so "wl" finds "Wallet". */
 function matches(query: string, label: string): boolean {
@@ -40,6 +48,7 @@ export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [tasks, setTasks] = useState<Todo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
@@ -48,9 +57,21 @@ export default function CommandPalette() {
     setOpen(false);
     setQuery("");
     setActiveIndex(0);
+    setTasks([]);
   }, []);
 
   const commands = useMemo<Command[]>(() => {
+    /* Matching tasks lead: once the user has typed something, what they are
+       almost always looking for is a specific piece of work, not a setting. */
+    const taskResults: Command[] = tasks.map((task) => ({
+      id: `task-${task._id}`,
+      label: task.title,
+      hint: "Task",
+      icon: <TasksIcon className="w-4 h-4" />,
+      alwaysVisible: true,
+      run: () => router.push(`/tasks/${task._id}`),
+    }));
+
     const navigation: Command[] = NAV_SECTIONS.map((section) => ({
       id: `nav-${section.href}`,
       label: `Go to ${section.label}`,
@@ -60,6 +81,7 @@ export default function CommandPalette() {
     }));
 
     return [
+      ...taskResults,
       {
         id: "new-task",
         label: "New task",
@@ -75,11 +97,18 @@ export default function CommandPalette() {
           theme === "dark" ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />,
         run: toggleTheme,
       },
+      {
+        id: "shortcuts",
+        label: "Keyboard shortcuts",
+        hint: "?",
+        icon: <KeyboardIcon className="w-4 h-4" />,
+        run: () => window.dispatchEvent(new Event("taskflow:shortcuts")),
+      },
     ];
-  }, [router, theme, toggleTheme]);
+  }, [router, tasks, theme, toggleTheme]);
 
   const visible = useMemo(
-    () => commands.filter((command) => matches(query, command.label)),
+    () => commands.filter((command) => command.alwaysVisible || matches(query, command.label)),
     [commands, query]
   );
 
@@ -98,6 +127,41 @@ export default function CommandPalette() {
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  /**
+   * Searches tasks server-side while the palette is open.
+   *
+   * The palette previously only knew about static commands, so the fastest way
+   * to reach a task was to leave the palette and use the page's own search —
+   * which does not exist on the ledger or wallet pages at all.
+   */
+  useEffect(() => {
+    const term = query.trim();
+    if (!open || term.length < 2) {
+      setTasks([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const page = await api<{ todos: Todo[] }>(
+          `/api/todos?search=${encodeURIComponent(term)}&limit=${TASK_RESULT_LIMIT}`,
+          { signal: controller.signal }
+        );
+        setTasks(page.todos);
+      } catch {
+        // A failed lookup leaves the static commands usable; surfacing an error
+        // inside a palette the user is mid-keystroke in would be noise.
+        setTasks([]);
+      }
+    }, TASK_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [open, query]);
 
   // Clamp the cursor when filtering shrinks the list under it.
   useEffect(() => {
@@ -162,8 +226,8 @@ export default function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search commands…"
-            aria-label="Search commands"
+            placeholder="Search tasks and commands…"
+            aria-label="Search tasks and commands"
             aria-autocomplete="list"
             aria-controls="palette-list"
             className="flex-1 bg-transparent border-0 outline-none text-sm text-ink placeholder:text-ink-muted"

@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import Todo from "@/models/Todo";
 import { toTodoDTO, type TodoDTO } from "@/lib/dto/todo";
 import { NotFoundError } from "@/lib/api/errors";
+import { derivePaymentStatus } from "@/lib/payment";
 import type {
   CreateTodoInput, TodoListQuery, UpdateTodoInput,
 } from "@/lib/schemas/todo";
@@ -23,10 +24,11 @@ function escapeRegex(input: string): string {
 
 export async function listTodos(
   userId: string,
-  { page, limit, status, search }: TodoListQuery
+  { page, limit, status, priority, search }: TodoListQuery
 ): Promise<TodoPage> {
   const filter: Record<string, unknown> = { userId: new Types.ObjectId(userId) };
   if (status) filter.status = status;
+  if (priority) filter.priority = priority;
   if (search) {
     const pattern = new RegExp(escapeRegex(search), "i");
     filter.$or = [{ title: pattern }, { description: pattern }];
@@ -62,14 +64,19 @@ export async function createTodo(
     title: input.title,
     description: input.description,
     status: input.status,
+    priority: input.priority,
     dueDate: input.dueDate ?? undefined,
     images: input.images,
     // A feature image the caller did not upload into `images` would render a
     // cover with no matching gallery entry, so it is folded in here.
     featureImage: input.featureImage ?? input.images[0] ?? undefined,
     paymentAmountMinor: input.paymentAmount ?? undefined,
+    paidAmountMinor: input.paidAmount ?? undefined,
     paymentCurrency: input.paymentCurrency,
-    paymentStatus: input.paymentStatus,
+    paymentMethod: input.paymentMethod,
+    // Derived from the amounts rather than taken from the caller: the two are
+    // the same fact, and a stored status that disagrees with them is wrong.
+    paymentStatus: derivePaymentStatus(input.paymentAmount, input.paidAmount),
   });
 
   return toTodoDTO(todo);
@@ -90,8 +97,9 @@ export async function updateTodo(
 
   if (input.title !== undefined) set.title = input.title;
   if (input.status !== undefined) set.status = input.status;
+  if (input.priority !== undefined) set.priority = input.priority;
   if (input.paymentCurrency !== undefined) set.paymentCurrency = input.paymentCurrency;
-  if (input.paymentStatus !== undefined) set.paymentStatus = input.paymentStatus;
+  if (input.paymentMethod !== undefined) set.paymentMethod = input.paymentMethod;
   if (input.images !== undefined) set.images = input.images;
 
   if ("description" in input) assign("description", input.description);
@@ -102,6 +110,29 @@ export async function updateTodo(
     // Clear the pre-migration float so a stale value cannot resurface through
     // the `readMinor` fallback once the new column is unset.
     unset.paymentAmount = "";
+  }
+  if ("paidAmount" in input) assign("paidAmountMinor", input.paidAmount);
+
+  /*
+   * Payment status follows the two amounts, so it has to be recomputed
+   * whenever either moves — and a PATCH may carry only one of them. The
+   * missing side is read back from the stored task through the DTO, so this
+   * agrees with the figures the client was shown rather than re-deriving them
+   * a second way.
+   *
+   * Only the payment-touching patches pay for the extra read; the far more
+   * common `{ status }` from a board drag does not.
+   */
+  if ("paymentAmount" in input || "paidAmount" in input) {
+    const current = await Todo.findOne({ _id: todoId, userId }).lean();
+    if (!current) throw new NotFoundError("Task not found");
+    const stored = toTodoDTO(current);
+
+    const total =
+      "paymentAmount" in input ? input.paymentAmount ?? null : stored.paymentAmountMinor;
+    const paid = "paidAmount" in input ? input.paidAmount ?? null : stored.paidAmountMinor;
+
+    set.paymentStatus = derivePaymentStatus(total, paid);
   }
 
   const update: Record<string, unknown> = {};

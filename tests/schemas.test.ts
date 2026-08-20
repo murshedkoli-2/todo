@@ -61,6 +61,26 @@ describe("createTodoSchema", () => {
     expect(parsed.paymentAmount).toBe(9999);
   });
 
+  test("converts the paid amount to minor units", () => {
+    const parsed = createTodoSchema.parse({ title: "A", paidAmount: "75.50" });
+    expect(parsed.paidAmount).toBe(7550);
+  });
+
+  test("rejects a negative paid amount", () => {
+    expect(createTodoSchema.safeParse({ title: "A", paidAmount: "-1" }).success).toBe(false);
+  });
+
+  test("defaults the payment method to unset", () => {
+    expect(createTodoSchema.parse({ title: "A" }).paymentMethod).toBe("unset");
+  });
+
+  test("accepts a known payment method and rejects an invented one", () => {
+    expect(createTodoSchema.parse({ title: "A", paymentMethod: "bkash" }).paymentMethod)
+      .toBe("bkash");
+    expect(createTodoSchema.safeParse({ title: "A", paymentMethod: "paypal" }).success)
+      .toBe(false);
+  });
+
   test("uppercases the currency code", () => {
     expect(createTodoSchema.parse({ title: "A", paymentCurrency: "usd" }).paymentCurrency)
       .toBe("USD");

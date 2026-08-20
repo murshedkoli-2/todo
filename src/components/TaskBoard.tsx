@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import {
   BOARD_COLUMNS, STATUS_COLORS, STATUS_LABELS, Todo, getDisplayStatus,
 } from "@/lib/types";
+import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
 import Money from "@/components/ui/Money";
+import PriorityFlag from "@/components/ui/PriorityFlag";
 import { AlertIcon, CalendarIcon, SpinnerIcon } from "@/components/ui/icons";
 
 interface TaskBoardProps {
@@ -17,10 +19,6 @@ interface TaskBoardProps {
 }
 
 const DRAG_MIME = "application/x-taskflow-todo";
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 /**
  * Status board.
@@ -119,6 +117,10 @@ export default function TaskBoard({
                       }}
                     >
                       <div className="flex items-start gap-2">
+                        <PriorityFlag
+                          priority={todo.priority}
+                          className="flex-shrink-0 mt-0.5"
+                        />
                         <button
                           type="button"
                           onClick={() => onView(todo)}
@@ -145,7 +147,7 @@ export default function TaskBoard({
                               ) : (
                                 <CalendarIcon className="w-3 h-3" />
                               )}
-                              {formatDate(todo.dueDate)}
+                              {formatDueLabel(todo.dueDate, { relative: todo.status !== "completed" })}
                             </span>
                           )}
                           {todo.paymentAmountMinor != null && (

@@ -1,22 +1,30 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
-import { PAYMENT_STATUSES, TODO_STATUSES } from "@/lib/schemas/todo";
-import type { PaymentStatus, TodoStatus } from "@/lib/schemas/todo";
+import {
+  PAYMENT_METHODS, PAYMENT_STATUSES, TODO_PRIORITIES, TODO_STATUSES,
+} from "@/lib/schemas/todo";
+import type {
+  PaymentMethod, PaymentStatus, TodoPriority, TodoStatus,
+} from "@/lib/schemas/todo";
 
-export type { PaymentStatus, TodoStatus };
+export type { PaymentMethod, PaymentStatus, TodoPriority, TodoStatus };
 
 export interface ITodo extends Document {
   userId: Types.ObjectId;
   title: string;
   description?: string;
   status: TodoStatus;
+  priority: TodoPriority;
   dueDate?: Date;
   images: string[];
   featureImage?: string;
-  /** Integer minor units (paisa). See `src/lib/money.ts`. */
+  /** The job's total cost, in integer minor units (paisa). See `src/lib/money.ts`. */
   paymentAmountMinor?: number;
+  /** Received against that total, in integer minor units. */
+  paidAmountMinor?: number;
   /** @deprecated Pre-migration float column. Read via `readMinor`, never written. */
   paymentAmount?: number;
   paymentCurrency: string;
+  paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +56,14 @@ const TodoSchema = new Schema<ITodo>(
       },
       default: "todo",
     },
+    priority: {
+      type: String,
+      enum: {
+        values: TODO_PRIORITIES,
+        message: "Priority must be one of: none, low, medium, high, urgent",
+      },
+      default: "none",
+    },
     dueDate: { type: Date },
     images: {
       type: [String],
@@ -67,6 +83,15 @@ const TodoSchema = new Schema<ITodo>(
       },
       default: undefined,
     },
+    paidAmountMinor: {
+      type: Number,
+      min: [0, "Paid amount cannot be negative"],
+      validate: {
+        validator: Number.isInteger,
+        message: "Paid amount must be an integer number of minor units",
+      },
+      default: undefined,
+    },
     paymentAmount: { type: Number, default: undefined, select: true },
     paymentCurrency: {
       type: String,
@@ -74,6 +99,14 @@ const TodoSchema = new Schema<ITodo>(
       uppercase: true,
       maxlength: [10, "Currency code too long"],
       default: "BDT",
+    },
+    paymentMethod: {
+      type: String,
+      enum: {
+        values: PAYMENT_METHODS,
+        message: "Payment method must be one of: unset, cash, bkash, nagad, rocket, bank, other",
+      },
+      default: "unset",
     },
     paymentStatus: {
       type: String,
@@ -92,6 +125,8 @@ const TodoSchema = new Schema<ITodo>(
 TodoSchema.index({ userId: 1, createdAt: -1 });
 TodoSchema.index({ userId: 1, status: 1, createdAt: -1 });
 TodoSchema.index({ userId: 1, dueDate: 1 });
+/* Serves the "urgent work first" sort, which is the default triage view. */
+TodoSchema.index({ userId: 1, priority: -1, dueDate: 1 });
 
 const Todo: Model<ITodo> =
   mongoose.models.Todo || mongoose.model<ITodo>("Todo", TodoSchema);

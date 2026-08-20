@@ -7,6 +7,7 @@ function todo(overrides: Partial<Todo>): Todo {
     _id: "1",
     title: "T",
     status: "todo",
+    priority: "none",
     dueDate: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -15,7 +16,10 @@ function todo(overrides: Partial<Todo>): Todo {
     images: [],
     featureImage: null,
     paymentAmountMinor: null,
+    paidAmountMinor: null,
+    dueAmountMinor: null,
     paymentCurrency: "BDT",
+    paymentMethod: "unset",
     paymentStatus: "unpaid",
     ...overrides,
   };

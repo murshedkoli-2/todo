@@ -41,10 +41,15 @@ test("creates, edits, and deletes a task", async ({ page }) => {
 
   await page.getByLabel("Title").fill(title);
   await page.getByLabel(/Description/).fill("Created by the end-to-end suite.");
-  await page.getByLabel(/^Amount/).fill("1234.56");
+  await page.getByLabel(/^Total cost/).fill("1234.56");
   await page.getByRole("button", { name: "Create task" }).click();
 
   await expect(page).toHaveURL(/\/$/);
+
+  // The task list defaults to the dense list view; the card-shaped assertions
+  // below (cover image, edit button, formatted amount) belong to the grid.
+  await page.getByRole("radio", { name: "Grid" }).click();
+
   const card = page.getByRole("article", { name: title });
   await expect(card).toBeVisible();
 
@@ -65,6 +70,108 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
 
   await expect(page.getByRole("article", { name: `${title} (edited)` })).toBeHidden();
+});
+
+test("derives due and payment status from the total and what has been paid", async ({ page }) => {
+  const title = `E2E payment ${stamp()}`;
+
+  await page.goto("/tasks/new");
+  await page.getByLabel("Title").fill(title);
+  await page.getByLabel(/^Total cost/).fill("13500");
+  await page.getByLabel(/^Paid so far/).fill("7500");
+  await page.getByRole("button", { name: "bKash" }).click();
+
+  // The summary is derived live, before anything is saved. There is no status
+  // control to set — 13500 less 7500 is what makes this task part-paid.
+  await expect(page.getByText("৳6,000")).toBeVisible();
+  await expect(page.getByText("Partial")).toBeVisible();
+
+  await page.getByRole("button", { name: "Create task" }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  // The server derives the same status rather than trusting what was posted.
+  await page.getByRole("listitem").filter({ hasText: title })
+    .getByRole("button", { name: title }).click();
+  await expect(page).toHaveURL(/\/tasks\/[a-f0-9]{24}/);
+
+  await expect(page.getByText("৳13,500")).toBeVisible();
+  await expect(page.getByText("৳7,500")).toBeVisible();
+  await expect(page.getByText("৳6,000")).toBeVisible();
+  await expect(page.getByText("bKash")).toBeVisible();
+
+  // Settling it flips the derived status with no status control involved.
+  await page.getByRole("link", { name: "Edit task" }).click();
+  await page.getByLabel(/^Paid so far/).fill("13500");
+  await expect(page.getByText("Paid", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("captures a task from the quick-add bar, parsing date and priority", async ({ page }) => {
+  const title = `E2E quick ${stamp()}`;
+
+  const quickAdd = page.getByLabel("Quick add a task");
+  await quickAdd.fill(`${title} tomorrow !high`);
+
+  // The preview states what will be created before anything is submitted.
+  const preview = page.getByText("Will create");
+  await expect(preview).toBeVisible();
+
+  await page.getByRole("button", { name: "Add" }).click();
+
+  // The parsed tokens are stripped from the stored title, not left in it.
+  const row = page.getByRole("listitem").filter({ hasText: title });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("!high");
+  await expect(row).toContainText("Tomorrow");
+  await expect(row.getByText("High")).toBeAttached();
+
+  // The bar clears on success and is ready for the next capture.
+  await expect(quickAdd).toHaveValue("");
+});
+
+test("completes a task from the list and undoes it", async ({ page }) => {
+  const title = `E2E undo ${stamp()}`;
+
+  await page.getByLabel("Quick add a task").fill(title);
+  await page.getByRole("button", { name: "Add" }).click();
+
+  const row = page.getByRole("listitem").filter({ hasText: title });
+  await expect(row).toBeVisible();
+
+  await row.getByRole("checkbox").click();
+  await expect(row.getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+
+  // A completed task leaves the default view, and the toast is the only way
+  // back from a mis-click — which is exactly what makes it worth testing.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: title })).toBeVisible();
+});
+
+test("opens the keyboard shortcuts sheet with ?", async ({ page }) => {
+  await page.keyboard.press("?");
+
+  const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toContainText("Focus quick add");
+
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+});
+
+test("finds a task through the command palette", async ({ page }) => {
+  const title = `E2E palette ${stamp()}`;
+
+  await page.getByLabel("Quick add a task").fill(title);
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: title })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByLabel("Search tasks and commands").fill(title);
+
+  await page.getByRole("option", { name: new RegExp(title) }).first().click();
+  await expect(page).toHaveURL(/\/tasks\/[a-f0-9]{24}/);
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
 });
 
 test("moves a task between board columns", async ({ page }) => {

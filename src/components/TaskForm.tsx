@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Todo, TodoStatus, PaymentStatus,
+  Todo, TodoStatus, TodoPriority, PaymentMethod,
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
+  PRIORITY_CHOICES, PRIORITY_LABELS, PRIORITY_COLORS, PRIORITY_TEXT_COLORS,
+  PAYMENT_METHOD_CHOICES, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_COLORS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
 } from "@/lib/types";
 import { api, errorMessage } from "@/lib/apiClient";
-import { fromMinor } from "@/lib/money";
+import { fromMinor, toMinor } from "@/lib/money";
+import { derivePaymentStatus, dueMinor } from "@/lib/payment";
+import Money from "@/components/ui/Money";
 import AppShell from "@/components/shell/AppShell";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -21,34 +25,43 @@ import {
 
 interface TaskFormProps {
   todo?: Todo | null;
+  /** Title carried over from the quick-add bar's "More options". */
+  initialTitle?: string;
 }
 
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const STATUS_OPTIONS: TodoStatus[] = ["todo", "in_progress", "completed"];
-const PAYMENT_STATUS_OPTIONS: PaymentStatus[] = ["unpaid", "partial", "paid"];
 const CURRENCIES = ["BDT", "USD", "EUR", "GBP", "INR", "AED", "SAR"];
 
-export default function TaskForm({ todo }: TaskFormProps) {
+export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
   const router = useRouter();
   const toast = useToast();
   const isEdit = Boolean(todo);
 
-  const [title, setTitle]                   = useState(todo?.title ?? "");
+  const [title, setTitle]                   = useState(todo?.title ?? initialTitle);
   const [description, setDescription]       = useState(todo?.description ?? "");
   const [status, setStatus]                 = useState<TodoStatus>(todo?.status ?? "todo");
+  const [priority, setPriority]             = useState<TodoPriority>(todo?.priority ?? "none");
   const [dueDate, setDueDate]               = useState(todo?.dueDate ? todo.dueDate.slice(0, 10) : "");
   const [images, setImages]                 = useState<string[]>(todo?.images ?? []);
   const [featureImage, setFeatureImage]     = useState<string>(todo?.featureImage ?? "");
-  // Stored in minor units; the field edits major units, converted on submit.
+  // Stored in minor units; the fields edit major units, converted on submit.
   const [paymentAmount, setPaymentAmount]   = useState(
     todo?.paymentAmountMinor != null
       ? String(fromMinor(todo.paymentAmountMinor, todo.paymentCurrency))
       : ""
   );
+  const [paidAmount, setPaidAmount]         = useState(
+    todo?.paidAmountMinor != null
+      ? String(fromMinor(todo.paidAmountMinor, todo.paymentCurrency))
+      : ""
+  );
   const [paymentCurrency, setPaymentCurrency] = useState(todo?.paymentCurrency ?? "BDT");
-  const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus>(todo?.paymentStatus ?? "unpaid");
+  const [paymentMethod, setPaymentMethod]   = useState<PaymentMethod>(
+    todo?.paymentMethod ?? "unset"
+  );
 
   const [saving, setSaving]                 = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
@@ -136,13 +149,16 @@ export default function TaskForm({ todo }: TaskFormProps) {
         title,
         description,
         status,
+        priority,
         dueDate: dueDate || null,
         images,
         featureImage: featureImage || null,
         // Sent in major units; the schema converts to integer minor units.
+        // `paymentStatus` is not sent: the service derives it from these two.
         paymentAmount: paymentAmount !== "" ? paymentAmount : null,
+        paidAmount: paidAmount !== "" ? paidAmount : null,
         paymentCurrency,
-        paymentStatus,
+        paymentMethod,
       };
 
       await api(isEdit ? `/api/todos/${todo!._id}` : "/api/todos", {
@@ -151,8 +167,8 @@ export default function TaskForm({ todo }: TaskFormProps) {
       });
 
       toast.success(isEdit ? "Task saved." : "Task created.");
-      router.push("/");
-      // Without this the server component behind `/` serves its cached render
+      router.push("/tasks");
+      // Without this the server component behind `/tasks` serves its cached render
       // and the new task does not appear until a hard reload.
       router.refresh();
     } catch (caught: unknown) {
@@ -168,7 +184,7 @@ export default function TaskForm({ todo }: TaskFormProps) {
     try {
       await api(`/api/todos/${todo._id}`, { method: "DELETE" });
       toast.success("Task deleted.");
-      router.push("/");
+      router.push("/tasks");
       router.refresh();
     } catch (caught: unknown) {
       setError(errorMessage(caught));
@@ -179,9 +195,20 @@ export default function TaskForm({ todo }: TaskFormProps) {
 
   const busy = saving || deleting || uploadingCount > 0;
 
+  /*
+   * Live payment summary. Parsed through the same `toMinor` the schema uses, so
+   * what the form shows before saving is what the server will compute after —
+   * a preview derived a second way would eventually disagree with the badge on
+   * the task it produced.
+   */
+  const totalMinor = toMinor(paymentAmount, paymentCurrency);
+  const paidMinor = toMinor(paidAmount, paymentCurrency);
+  const due = dueMinor(totalMinor, paidMinor);
+  const derivedStatus = derivePaymentStatus(totalMinor, paidMinor);
+
   return (
     <AppShell workspace="My Workspace">
-      <Breadcrumb items={[{ label: "Tasks", href: "/" }, { label: isEdit ? "Edit task" : "New task" }]} />
+      <Breadcrumb items={[{ label: "Tasks", href: "/tasks" }, { label: isEdit ? "Edit task" : "New task" }]} />
 
       <div className="mb-6">
         <h1 className="text-display">{isEdit ? "Edit task" : "Create a task"}</h1>
@@ -272,6 +299,35 @@ export default function TaskForm({ todo }: TaskFormProps) {
               </div>
 
               <div>
+                <span className="field-label">Priority</span>
+                <div className="flex flex-wrap gap-2">
+                  {PRIORITY_CHOICES.map((option) => {
+                    const active = priority === option;
+                    const color = PRIORITY_COLORS[option];
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setPriority(option)}
+                        className="flex items-center gap-2 px-4 h-10 rounded-control text-sm font-semibold"
+                        style={{
+                          background: active
+                            ? `color-mix(in srgb, ${color} 12%, transparent)`
+                            : "var(--bg-sunken)",
+                          border: `1px solid ${active ? color : "transparent"}`,
+                          color: active ? PRIORITY_TEXT_COLORS[option] : "var(--text-secondary)",
+                        }}
+                        aria-pressed={active}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                        {PRIORITY_LABELS[option]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label htmlFor="task-due-date" className="field-label">
                   Due date <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span>
                 </label>
@@ -290,7 +346,7 @@ export default function TaskForm({ todo }: TaskFormProps) {
 
               <div>
                 <label htmlFor="task-payment-amount" className="field-label">
-                  Amount <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span>
+                  Total cost <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span>
                 </label>
                 <div className="flex gap-2">
                   <select
@@ -316,31 +372,90 @@ export default function TaskForm({ todo }: TaskFormProps) {
               </div>
 
               <div>
-                <span className="field-label">Payment status</span>
+                <label htmlFor="task-paid-amount" className="field-label">
+                  Paid so far <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span>
+                </label>
+                <input
+                  id="task-paid-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="input-dark"
+                  aria-describedby="payment-summary"
+                />
+              </div>
+
+              <div>
+                <span className="field-label">Payment method</span>
                 <div className="flex flex-wrap gap-2">
-                  {PAYMENT_STATUS_OPTIONS.map((option) => {
-                    const active = paymentStatus === option;
-                    const color = PAYMENT_STATUS_COLORS[option];
+                  {PAYMENT_METHOD_CHOICES.map((option) => {
+                    const active = paymentMethod === option;
+                    const color = PAYMENT_METHOD_COLORS[option];
                     return (
                       <button
                         key={option}
                         type="button"
-                        onClick={() => setPaymentStatus(option)}
+                        onClick={() => setPaymentMethod(option)}
                         className="flex items-center gap-2 px-4 h-10 rounded-control text-sm font-semibold"
                         style={{
                           background: active
                             ? `color-mix(in srgb, ${color} 12%, transparent)`
                             : "var(--bg-sunken)",
                           border: `1px solid ${active ? color : "transparent"}`,
-                          color: active ? PAYMENT_STATUS_TEXT_COLORS[option] : "var(--text-secondary)",
+                          color: active ? "var(--text-primary)" : "var(--text-secondary)",
                         }}
                         aria-pressed={active}
                       >
                         <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                        {PAYMENT_STATUS_LABELS[option]}
+                        {PAYMENT_METHOD_LABELS[option]}
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/*
+                The status badge is read from the two amounts rather than picked.
+                It used to be a third selector the user had to keep in step by
+                hand, which is how a task came to read "৳13,500 · UNPAID" long
+                after the money had arrived.
+              */}
+              <div id="payment-summary" className="well p-4" aria-live="polite">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-meta">Due</span>
+                  {due != null ? (
+                    <Money
+                      minor={due}
+                      currency={paymentCurrency}
+                      size="lg"
+                      tone={due > 0 ? "negative" : "positive"}
+                      compact
+                    />
+                  ) : (
+                    <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                      No total set
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mt-2.5 pt-2.5 border-t border-line">
+                  <span className="text-meta">Status</span>
+                  <span
+                    className="pill"
+                    style={{
+                      background: `color-mix(in srgb, ${PAYMENT_STATUS_COLORS[derivedStatus]} 14%, transparent)`,
+                      color: PAYMENT_STATUS_TEXT_COLORS[derivedStatus],
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: PAYMENT_STATUS_COLORS[derivedStatus] }}
+                    />
+                    {PAYMENT_STATUS_LABELS[derivedStatus]}
+                  </span>
                 </div>
               </div>
             </section>

@@ -7,14 +7,17 @@ import Link from "next/link";
 import {
   Todo, TodoStatus, DisplayStatus, getDisplayStatus,
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
+  PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
 } from "@/lib/types";
+import { isPastDue as dueDayHasPassed } from "@/lib/dueDate";
 import { api, errorMessage } from "@/lib/apiClient";
 import AppShell from "@/components/shell/AppShell";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Money from "@/components/ui/Money";
+import PriorityFlag from "@/components/ui/PriorityFlag";
 import TaskCover from "@/components/ui/TaskCover";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
@@ -54,8 +57,8 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
 
   const displayStatus: DisplayStatus = getDisplayStatus(todo);
   const statusColor = STATUS_COLORS[displayStatus];
-  const isPastDue = Boolean(todo.dueDate) && new Date(todo.dueDate!) < new Date();
-  const showOverdue = isPastDue && todo.status !== "completed";
+  const showOverdue =
+    Boolean(todo.dueDate) && dueDayHasPassed(todo.dueDate!) && todo.status !== "completed";
 
   useEffect(() => {
     if (!lightboxImage) return;
@@ -93,7 +96,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
     try {
       await api(`/api/todos/${todo._id}`, { method: "DELETE" });
       toast.success("Task deleted.");
-      router.push("/");
+      router.push("/tasks");
       router.refresh();
     } catch (caught: unknown) {
       setError(errorMessage(caught));
@@ -104,7 +107,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
 
   return (
     <AppShell workspace="My Workspace">
-      <Breadcrumb items={[{ label: "Tasks", href: "/" }, { label: todo.title }]} />
+      <Breadcrumb items={[{ label: "Tasks", href: "/tasks" }, { label: todo.title }]} />
 
       {error && (
         <div className="alert-error mb-5" role="alert">
@@ -275,6 +278,17 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
 
             <dl className="flex flex-col gap-4">
               <div>
+                <dt className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Priority</dt>
+                <dd className="text-sm font-semibold flex items-center gap-2">
+                  {todo.priority === "none" ? (
+                    <span style={{ color: "var(--text-secondary)" }}>Not set</span>
+                  ) : (
+                    <PriorityFlag priority={todo.priority} variant="pill" />
+                  )}
+                </dd>
+              </div>
+
+              <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
                 <dt className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Due date</dt>
                 <dd
                   className="text-sm font-semibold flex items-center gap-2"
@@ -293,23 +307,79 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
               </div>
 
               <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-                <dt className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Payment</dt>
+                <dt className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Payment</dt>
                 <dd>
-                  {todo.paymentAmountMinor != null ? (
+                  {todo.paymentAmountMinor != null || todo.paidAmountMinor != null ? (
                     <>
-                      <Money
-                        minor={todo.paymentAmountMinor}
-                        currency={todo.paymentCurrency}
-                        size="lg"
-                        tone="neutral"
-                        className="block"
-                      />
-                      <span
-                        className="text-xs font-semibold"
-                        style={{ color: PAYMENT_STATUS_TEXT_COLORS[todo.paymentStatus] }}
-                      >
-                        {PAYMENT_STATUS_LABELS[todo.paymentStatus]}
-                      </span>
+                      {/* Total, paid and due read as a statement: three figures
+                          in one right-aligned column, so the shortfall is a
+                          subtraction the eye can do rather than a hunt. */}
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                          Total cost
+                        </span>
+                        {todo.paymentAmountMinor != null ? (
+                          <Money
+                            minor={todo.paymentAmountMinor}
+                            currency={todo.paymentCurrency}
+                            size="md"
+                            tone="neutral"
+                          />
+                        ) : (
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            Not set
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-baseline justify-between gap-3 mt-1.5">
+                        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                          Paid
+                        </span>
+                        {todo.paidAmountMinor != null ? (
+                          <Money
+                            minor={todo.paidAmountMinor}
+                            currency={todo.paymentCurrency}
+                            size="md"
+                            tone="neutral"
+                          />
+                        ) : (
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            Not recorded
+                          </span>
+                        )}
+                      </div>
+
+                      {todo.dueAmountMinor != null && (
+                        <div
+                          className="flex items-baseline justify-between gap-3 mt-2 pt-2"
+                          style={{ borderTop: "1px solid var(--border)" }}
+                        >
+                          <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                            Due
+                          </span>
+                          <Money
+                            minor={todo.dueAmountMinor}
+                            currency={todo.paymentCurrency}
+                            size="lg"
+                            tone={todo.dueAmountMinor > 0 ? "negative" : "positive"}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-3 mt-2.5">
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: PAYMENT_STATUS_TEXT_COLORS[todo.paymentStatus] }}
+                        >
+                          {PAYMENT_STATUS_LABELS[todo.paymentStatus]}
+                        </span>
+                        {todo.paymentMethod !== "unset" && (
+                          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                            {PAYMENT_METHOD_LABELS[todo.paymentMethod]}
+                          </span>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <span className="text-sm" style={{ color: "var(--text-secondary)" }}>None</span>
