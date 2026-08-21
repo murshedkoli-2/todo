@@ -19,6 +19,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useServerData } from "@/hooks/useServerData";
 import { TasksIcon, CheckIcon, PlusIcon, GridIcon, BoardIcon, ListIcon } from "@/components/ui/icons";
 
 interface TasksClientProps {
@@ -91,7 +92,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   const router = useRouter();
   const toast = useToast();
 
-  const [todos, setTodos] = useState<Todo[]>(initialTodos);
+  const [todos, setTodos] = useServerData<Todo[]>(initialTodos);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisplayStatus>("all");
   /* View and sort are preferences, not page state: they survive navigating to
@@ -208,7 +209,11 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
         setPending(id, false);
       }
     },
-    [toast, setPending]
+    // `setTodos` comes from `useServerData` rather than `useState` directly, so
+    // the linter cannot see that it is a stable setter and asks for it here.
+    // Listing it is honest and costs nothing: the identity never changes, so
+    // the callback is not rebuilt.
+    [toast, setPending, setTodos]
   );
 
   const handleStatusChange = useCallback(
@@ -233,7 +238,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
 
       setTodos((current) => [created, ...current]);
     },
-    [toast]
+    [toast, setTodos]
   );
 
   const openTask = useCallback(
@@ -424,7 +429,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           pendingIds={pendingIds}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5 animate-stagger">
           {visibleTodos.map((todo, index) => (
             <div
               key={todo._id}

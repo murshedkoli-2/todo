@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { continueTo, expectStep } from "./wizard";
 
 /**
  * Everything here runs without seeded data — route protection, security
@@ -76,19 +77,54 @@ test.describe("security headers", () => {
 });
 
 test.describe("login page", () => {
-  test("renders the form and its accessible names", async ({ page }) => {
+  /*
+   * Field queries are scoped to the panel throughout. The stepper names every
+   * step in the flow for assistive tech — "Step 2, Password" — so an unscoped
+   * `getByLabel("Password")` matches the rail button as well as the input, and
+   * would pass on the wrong element.
+   */
+  const panel = (page: import("@playwright/test").Page) => page.locator(".wizard-panel");
+
+  test("asks for the email first, then the password", async ({ page }) => {
     await page.goto("/login");
 
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-    await expect(page.getByLabel("Email address")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(panel(page).getByLabel("Email address")).toBeVisible();
+    // The password belongs to the second step and must not be reachable yet.
+    await expect(panel(page).getByLabel("Password")).toHaveCount(0);
+
+    await page.getByLabel("Email address").fill("someone@example.com");
+    await continueTo(page, "password");
+
+    await expect(panel(page).getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+  });
+
+  test("names the account being entered on the password step", async ({ page }) => {
+    // The reason the split earns its extra press: a typo in the address is
+    // visible before the password is typed, rather than surfacing afterwards
+    // as "incorrect email or password".
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("typo@example.com");
+    await continueTo(page, "password");
+
+    await expect(page.locator(".wizard-panel")).toContainText("typo@example.com");
+  });
+
+  test("refuses to advance past a malformed email", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("not-an-email");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expectStep(page, "email");
+    await expect(page.locator("p.alert-error")).toContainText(/valid email address/i);
   });
 
   test("rejects bad credentials with one generic message", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email address").fill("nobody@example.com");
-    await page.getByLabel("Password").fill("definitely-wrong-password");
+    await continueTo(page, "password");
+    await panel(page).getByLabel("Password").fill("definitely-wrong-password");
     await page.getByRole("button", { name: "Log in" }).click();
 
     // Scoped to the page's own alert: Next mounts a global route announcer with
@@ -103,28 +139,63 @@ test.describe("login page", () => {
     await page.goto("/login");
     await expect(page.getByLabel("Email address")).toBeFocused();
 
+    // Enter in the field advances the step rather than submitting a form that
+    // has no password in it yet.
     await page.keyboard.type("someone@example.com");
-    await page.keyboard.press("Tab"); // → "Forgot password?"
-    await page.keyboard.press("Tab"); // → password
-    await expect(page.getByLabel("Password")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expectStep(page, "password");
+
+    // The next step autofocuses its own field, so the flow never asks the
+    // keyboard user to hunt for where they are.
+    await expect(panel(page).getByLabel("Password")).toBeFocused();
+  });
+
+  test("going back keeps the email already entered", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("someone@example.com");
+    await continueTo(page, "password");
+
+    // Exact: the rail's own "Go back to step 1, Email" button also matches a
+    // substring search for "Back".
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expectStep(page, "email");
+    await expect(page.getByLabel("Email address")).toHaveValue("someone@example.com");
   });
 });
 
 test.describe("register page", () => {
-  test("states the password policy", async ({ page }) => {
+  /** Fills the identity step and advances to the password step. */
+  async function toPasswordStep(page: import("@playwright/test").Page) {
     await page.goto("/register");
+    await page.getByLabel("Full name").fill("Test User");
+    await page.getByLabel("Email address").fill("test@example.com");
+    await continueTo(page, "password");
+  }
+
+  test("states the password policy on the step that asks for one", async ({ page }) => {
+    await toPasswordStep(page);
     await expect(page.getByText(/At least 8 characters/)).toBeVisible();
   });
 
   test("blocks mismatched passwords before hitting the network", async ({ page }) => {
-    await page.goto("/register");
-    await page.getByLabel("Full name").fill("Test User");
-    await page.getByLabel("Email address").fill("test@example.com");
+    await toPasswordStep(page);
     await page.getByLabel("Password", { exact: true }).fill("longenough1");
     await page.getByLabel("Confirm password").fill("different123");
     await page.getByRole("button", { name: "Create account" }).click();
 
     await expect(page.locator("p.alert-error")).toContainText(/do not match/i);
+    // Still on the password step: a rejected step must not advance.
+    await expectStep(page, "password");
+  });
+
+  test("refuses to advance past an incomplete identity step", async ({ page }) => {
+    await page.goto("/register");
+    await page.getByLabel("Full name").fill("Test User");
+    await page.getByLabel("Email address").fill("nope");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expectStep(page, "you");
+    await expect(page.locator("p.alert-error")).toContainText(/valid email address/i);
   });
 });
 
@@ -138,6 +209,7 @@ test.describe("forgot password", () => {
     await expect(page.locator("p.alert-success")).toContainText(
       /If that email is registered/i
     );
+    await expectStep(page, "code");
     await expect(page.getByLabel("Verification code")).toBeVisible();
   });
 });

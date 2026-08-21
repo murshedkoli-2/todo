@@ -88,6 +88,28 @@ const config: Config = {
         "card-hover": "var(--shadow-card-hover)",
         popup: "var(--shadow-popup)",
         modal: "var(--shadow-modal)",
+        glow: "var(--shadow-glow)",
+        "glow-lg": "var(--shadow-glow-lg)",
+      },
+      backgroundImage: {
+        brand: "var(--brand-gradient)",
+        "brand-soft": "var(--brand-gradient-soft)",
+      },
+      /*
+       * The motion tokens, so a `duration-*`/`ease-*` utility resolves to the
+       * same value the component classes use rather than to Tailwind's
+       * defaults. A transition written inline should not be able to disagree
+       * with the design system it sits inside.
+       */
+      transitionDuration: {
+        fast: "var(--dur-fast)",
+        normal: "var(--dur-normal)",
+        slow: "var(--dur-slow)",
+      },
+      transitionTimingFunction: {
+        spring: "var(--ease-spring)",
+        expo: "var(--ease-out-expo)",
+        "in-out-quart": "var(--ease-in-out)",
       },
       spacing: {
         sidebar: "var(--sidebar-w)",

@@ -14,6 +14,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import {
   WalletIcon, CashIcon, PhoneIcon, BankIcon, PlusIcon, ChevronRightIcon,
 } from "@/components/ui/icons";
+import { useServerData } from "@/hooks/useServerData";
 
 interface WalletClientProps {
   initialWallets: WalletAccount[];
@@ -34,7 +35,7 @@ export const ACCOUNT_ICONS: Record<AccountType, React.ReactNode> = {
  * grid gave a ৳50 cash float the same visual weight as a bank account.
  */
 export default function WalletClient({ initialWallets }: WalletClientProps) {
-  const [wallets, setWallets] = useState<WalletAccount[]>(initialWallets);
+  const [wallets, setWallets] = useServerData<WalletAccount[]>(initialWallets);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<WalletAccount | null>(null);
   const [search, setSearch] = useState("");
@@ -110,7 +111,7 @@ export default function WalletClient({ initialWallets }: WalletClientProps) {
             </p>
           </section>
 
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 animate-stagger">
             {ACCOUNT_ORDER.map((type) => {
               const color = ACCOUNT_TYPE_COLORS[type];
               const share = totals.all > 0 ? (totals[type] / totals.all) * 100 : 0;

@@ -7,12 +7,12 @@ import {
 import { api, errorMessage } from "@/lib/apiClient";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import SegmentedToggle, { Segment } from "@/components/ui/SegmentedToggle";
 import Money from "@/components/ui/Money";
+import TransactionWizard, { DirectionChoice, TransactionDraft } from "@/components/TransactionWizard";
 import Sparkline from "@/components/ui/Sparkline";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
-  ArrowUpIcon, ArrowDownIcon, TrashIcon, SpinnerIcon, PlusIcon,
+  ArrowUpIcon, ArrowDownIcon, TrashIcon, SpinnerIcon,
 } from "@/components/ui/icons";
 
 interface PersonDetailModalProps {
@@ -22,9 +22,25 @@ interface PersonDetailModalProps {
   onPersonDelete: (id: string) => void;
 }
 
-const ENTRY_SEGMENTS: Segment<EntryType>[] = [
-  { value: "receivable", label: "They owe me", color: "var(--green)", icon: <ArrowUpIcon className="w-3.5 h-3.5" /> },
-  { value: "payable", label: "I owe them", color: "var(--red)", icon: <ArrowDownIcon className="w-3.5 h-3.5" /> },
+const ENTRY_DIRECTIONS: ReadonlyArray<DirectionChoice<EntryType>> = [
+  {
+    value: "receivable",
+    label: "They owe me",
+    copy: "Money you lent or are owed",
+    color: "var(--green)",
+    onColor: "var(--on-green)",
+    icon: <ArrowUpIcon className="w-4 h-4" />,
+    sign: 1,
+  },
+  {
+    value: "payable",
+    label: "I owe them",
+    copy: "Money you borrowed or must pay",
+    color: "var(--red)",
+    onColor: "var(--on-red)",
+    icon: <ArrowDownIcon className="w-4 h-4" />,
+    sign: -1,
+  },
 ];
 
 const formatDate = (value: string) =>
@@ -32,7 +48,6 @@ const formatDate = (value: string) =>
     day: "2-digit", month: "short", year: "numeric",
   });
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function PersonDetailModal({
   person, onClose, onPersonUpdate, onPersonDelete,
@@ -42,12 +57,6 @@ export default function PersonDetailModal({
   const [entries, setEntries] = useState<LedgerEntryWithBalance[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
   const [loadError, setLoadError] = useState("");
-
-  const [entryType, setEntryType] = useState<EntryType>("receivable");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [entryDate, setEntryDate] = useState(today);
-  const [submitting, setSubmitting] = useState(false);
 
   const [deletingEntry, setDeletingEntry] = useState<string | null>(null);
   const [confirmDeletePerson, setConfirmDeletePerson] = useState(false);
@@ -113,30 +122,18 @@ export default function PersonDetailModal({
     syncParent(refreshed);
   }, [person._id, syncParent]);
 
-  const handleAddEntry = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!amount || Number(amount) <= 0) {
-      toast.error("Enter an amount greater than zero.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await api(`/api/ledger/${person._id}/entries`, {
-        method: "POST",
-        body: { type: entryType, amount, note: note.trim(), date: entryDate },
-      });
-      await refresh();
-
-      setAmount("");
-      setNote("");
-      setEntryDate(today());
-      toast.success("Transaction added.");
-    } catch (error) {
-      toast.error(errorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
+  /*
+   * Throws rather than swallowing: `TransactionWizard` keeps the entry on
+   * screen and shows the message when the promise rejects, so a failed save
+   * must not resolve.
+   */
+  const handleAddEntry = async (draft: TransactionDraft<EntryType>) => {
+    await api(`/api/ledger/${person._id}/entries`, {
+      method: "POST",
+      body: { type: draft.type, amount: draft.amount, note: draft.note, date: draft.date },
+    });
+    await refresh();
+    toast.success("Transaction added.");
   };
 
   const handleDeleteEntry = async (entryId: string) => {
@@ -223,55 +220,11 @@ export default function PersonDetailModal({
         {/* ── Add entry ── */}
         <div className="px-5 sm:px-6 py-4 flex-shrink-0 border-b border-line">
           <p className="text-eyebrow mb-3">Add transaction</p>
-          <form onSubmit={handleAddEntry} className="flex flex-col gap-2.5">
-            <SegmentedToggle
-              segments={ENTRY_SEGMENTS}
-              value={entryType}
-              onChange={setEntryType}
-              ariaLabel="Transaction direction"
-            />
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none text-ink-muted">
-                  ৳
-                </span>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  placeholder="Amount"
-                  aria-label="Amount"
-                  min="0.01"
-                  step="0.01"
-                  className="input-dark pl-8"
-                />
-              </div>
-              <input
-                type="date"
-                value={entryDate}
-                onChange={(event) => setEntryDate(event.target.value)}
-                aria-label="Transaction date"
-                className="input-dark sm:w-40"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Note (optional)"
-                aria-label="Note"
-                maxLength={200}
-                className="input-dark flex-1"
-              />
-              <button type="submit" disabled={submitting} className="btn-primary px-5 flex-shrink-0">
-                {submitting ? <SpinnerIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
-                Add
-              </button>
-            </div>
-          </form>
+          <TransactionWizard
+            directions={ENTRY_DIRECTIONS}
+            directionLabel="Transaction direction"
+            onSubmit={handleAddEntry}
+          />
         </div>
 
         {/* ── History ── */}

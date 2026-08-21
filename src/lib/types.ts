@@ -196,6 +196,19 @@ export const ACCOUNT_TYPE_COLORS: Record<AccountType, string> = {
   bank_account: "var(--accent)",
 };
 
+/**
+ * The colour to print *on* a solid {@link ACCOUNT_TYPE_COLORS} fill.
+ *
+ * White clears AA on two of these three and fails badly on the yellow, so the
+ * partner token is looked up rather than assumed — see the `--on-*` note in
+ * `globals.css` and the guard in `tests/contrast.test.ts`.
+ */
+export const ACCOUNT_TYPE_ON_COLORS: Record<AccountType, string> = {
+  cash: "var(--on-yellow)",
+  mobile_banking: "var(--on-purple)",
+  bank_account: "var(--on-accent)",
+};
+
 export const MOBILE_BANKING_PROVIDERS = [
   "bKash", "Nagad", "Rocket", "Upay", "MyCash", "SureCash", "Other",
 ] as const;

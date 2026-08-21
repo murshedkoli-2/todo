@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { continueTo, continueThrough, expectStep } from "./wizard";
 
 /**
  * The signed-in journey: task → ledger → wallet.
@@ -24,9 +25,29 @@ const stamp = () => Date.now().toString(36);
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email address").fill(EMAIL!);
+  await continueTo(page, "password");
   await page.getByLabel("Password").fill(PASSWORD!);
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page).toHaveURL(/\/$/);
+}
+
+/**
+ * Walks the task wizard from the details step to the review step, filling
+ * whatever the caller supplies along the way. Every step but the first is
+ * optional, so this is also the shortest path to a saved task.
+ */
+async function fillTaskWizard(
+  page: Page,
+  fields: { title?: string; description?: string; total?: string; paid?: string; method?: string }
+) {
+  await expectStep(page, "details");
+  if (fields.title !== undefined) await page.getByLabel("Title").fill(fields.title);
+  if (fields.description !== undefined) await page.getByLabel(/Description/).fill(fields.description);
+
+  await continueThrough(page, "schedule", "payment");
+  if (fields.total !== undefined) await page.getByLabel(/^Total cost/).fill(fields.total);
+  if (fields.paid !== undefined) await page.getByLabel(/^Paid so far/).fill(fields.paid);
+  if (fields.method !== undefined) await page.getByRole("radio", { name: fields.method }).click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -39,12 +60,30 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   await page.getByRole("link", { name: "Create a new task" }).click();
   await expect(page).toHaveURL(/\/tasks\/new/);
 
-  await page.getByLabel("Title").fill(title);
-  await page.getByLabel(/Description/).fill("Created by the end-to-end suite.");
-  await page.getByLabel(/^Total cost/).fill("1234.56");
+  await fillTaskWizard(page, {
+    title,
+    description: "Created by the end-to-end suite.",
+    total: "1234.56",
+  });
+  await continueThrough(page, "attachments", "review");
+
+  // The review step restores the overview the split gave up: everything
+  // entered across four screens, before anything is written.
+  const review = page.locator(".wizard-panel[data-step='review']");
+  await expect(review).toContainText(title);
+  await expect(review).toContainText("৳1,234.56");
+
   await page.getByRole("button", { name: "Create task" }).click();
 
   await expect(page).toHaveURL(/\/$/);
+
+  /*
+   * Regression guard, and the reason this assertion runs before any reload:
+   * the list client used to seed its state from the server payload exactly
+   * once, so the refreshed rows that arrive after a create were rendered by
+   * the server and then ignored. The task only appeared after a manual reload.
+   * If this ever goes back to needing `page.reload()`, that bug is back.
+   */
 
   // The task list defaults to the dense list view; the card-shaped assertions
   // below (cover image, edit button, formatted amount) belong to the grid.
@@ -57,7 +96,9 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   await expect(card).toContainText("৳1,234.56");
 
   await card.getByRole("button", { name: `Edit ${title}` }).click();
+  await expectStep(page, "details");
   await page.getByLabel("Title").fill(`${title} (edited)`);
+  await continueThrough(page, "schedule", "payment", "attachments", "review");
   await page.getByRole("button", { name: "Save changes" }).click();
 
   await expect(page.getByRole("article", { name: `${title} (edited)` })).toBeVisible();
@@ -66,6 +107,9 @@ test("creates, edits, and deletes a task", async ({ page }) => {
     .getByRole("article", { name: `${title} (edited)` })
     .getByRole("button", { name: /^Edit/ })
     .click();
+  await expectStep(page, "details");
+  // Delete sits in the wizard footer on every step, so it never costs a walk
+  // to the end of the flow to reach it.
   await page.getByRole("button", { name: "Delete task" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
 
@@ -76,16 +120,14 @@ test("derives due and payment status from the total and what has been paid", asy
   const title = `E2E payment ${stamp()}`;
 
   await page.goto("/tasks/new");
-  await page.getByLabel("Title").fill(title);
-  await page.getByLabel(/^Total cost/).fill("13500");
-  await page.getByLabel(/^Paid so far/).fill("7500");
-  await page.getByRole("button", { name: "bKash" }).click();
+  await fillTaskWizard(page, { title, total: "13500", paid: "7500", method: "bKash" });
 
   // The summary is derived live, before anything is saved. There is no status
   // control to set — 13500 less 7500 is what makes this task part-paid.
   await expect(page.getByText("৳6,000")).toBeVisible();
   await expect(page.getByText("Partial")).toBeVisible();
 
+  await continueThrough(page, "attachments", "review");
   await page.getByRole("button", { name: "Create task" }).click();
   await expect(page).toHaveURL(/\/$/);
 
@@ -101,8 +143,10 @@ test("derives due and payment status from the total and what has been paid", asy
 
   // Settling it flips the derived status with no status control involved.
   await page.getByRole("link", { name: "Edit task" }).click();
+  await continueThrough(page, "schedule", "payment");
   await page.getByLabel(/^Paid so far/).fill("13500");
   await expect(page.getByText("Paid", { exact: true })).toBeVisible();
+  await continueThrough(page, "attachments", "review");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page).toHaveURL(/\/$/);
 });
@@ -178,7 +222,9 @@ test("moves a task between board columns", async ({ page }) => {
   const title = `E2E board ${stamp()}`;
 
   await page.goto("/tasks/new");
+  // The shortest path through the wizard: a title, then straight to review.
   await page.getByLabel("Title").fill(title);
+  await continueThrough(page, "schedule", "payment", "attachments", "review");
   await page.getByRole("button", { name: "Create task" }).click();
   await expect(page).toHaveURL(/\/$/);
 
@@ -198,15 +244,20 @@ test("records a ledger entry and updates the net position", async ({ page }) => 
 
   await page.goto("/ledger");
   await page.getByRole("button", { name: "Add person" }).click();
-  await page.getByLabel(/^Name/).fill(name);
-  await page.getByRole("dialog").getByRole("button", { name: "Add person" }).click();
+  const addPerson = page.getByRole("dialog");
+  await addPerson.getByLabel(/^Name/).fill(name);
+  await continueThrough(addPerson, "opening", "review");
+  await expect(addPerson.locator(".wizard-panel")).toContainText(name);
+  await addPerson.getByRole("button", { name: "Add person" }).click();
 
   const row = page.getByRole("button", { name: new RegExp(name) });
   await expect(row).toBeVisible();
 
   await row.click();
-  await page.getByRole("dialog").getByLabel("Amount").fill("500");
-  await page.getByRole("dialog").getByRole("button", { name: "Add" }).click();
+  const detail = page.getByRole("dialog");
+  await detail.getByLabel("Amount").fill("500");
+  await continueTo(detail, "details");
+  await detail.getByRole("button", { name: "Add transaction" }).click();
 
   // Running balance is computed at read time from the ordered ledger.
   await expect(page.getByRole("dialog")).toContainText("+৳500.00");
@@ -220,18 +271,26 @@ test("keeps a wallet balance consistent with its transactions", async ({ page })
 
   await page.goto("/wallet");
   await page.getByRole("button", { name: "Add account" }).click();
-  await page.getByLabel("Account name").fill(name);
-  await page.getByLabel("Current balance").fill("1000");
-  await page.getByRole("dialog").getByRole("button", { name: "Add account" }).click();
+  const addAccount = page.getByRole("dialog");
+  // Step one is the account type; "Cash" is preselected, so this is one press.
+  await continueTo(addAccount, "details");
+  await addAccount.getByLabel("Account name").fill(name);
+  await continueTo(addAccount, "balance");
+  await addAccount.getByLabel("Current balance").fill("1000");
+  await continueTo(addAccount, "review");
+  await addAccount.getByRole("button", { name: "Add account" }).click();
 
   const row = page.getByRole("button", { name: new RegExp(name) });
   await expect(row).toContainText("৳1,000.00");
 
   await row.click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("radio", { name: "Money out" }).click();
+  await dialog.getByRole("radio", { name: /Money out/ }).click();
   await dialog.getByLabel("Amount").fill("250.50");
-  await dialog.getByRole("button", { name: "Add" }).click();
+  await continueTo(dialog, "details");
+  // The step-two preview states the signed amount before it is committed.
+  await expect(dialog.locator(".wizard-panel")).toContainText("−৳250.50");
+  await dialog.getByRole("button", { name: "Add transaction" }).click();
 
   // 1000 − 250.50; the assertion fails on any float-drift regression.
   await expect(dialog).toContainText("৳749.50");

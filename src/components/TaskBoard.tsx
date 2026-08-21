@@ -53,7 +53,7 @@ export default function TaskBoard({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start animate-stagger">
       {BOARD_COLUMNS.map((status) => {
         const items = columns.get(status) ?? [];
         const color = STATUS_COLORS[status];

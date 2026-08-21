@@ -8,12 +8,12 @@ import {
 import { api, errorMessage } from "@/lib/apiClient";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import SegmentedToggle, { Segment } from "@/components/ui/SegmentedToggle";
 import Money from "@/components/ui/Money";
+import TransactionWizard, { DirectionChoice, TransactionDraft } from "@/components/TransactionWizard";
 import Sparkline from "@/components/ui/Sparkline";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
-  ArrowUpIcon, ArrowDownIcon, TrashIcon, SpinnerIcon, PlusIcon,
+  ArrowUpIcon, ArrowDownIcon, TrashIcon, SpinnerIcon,
   CashIcon, PhoneIcon, BankIcon,
 } from "@/components/ui/icons";
 
@@ -29,9 +29,25 @@ interface AccountResponse {
   transactions: WalletTransactionWithBalance[];
 }
 
-const TX_SEGMENTS: Segment<TxType>[] = [
-  { value: "credit", label: "Money in", color: "var(--green)", icon: <ArrowUpIcon className="w-3.5 h-3.5" /> },
-  { value: "debit", label: "Money out", color: "var(--red)", icon: <ArrowDownIcon className="w-3.5 h-3.5" /> },
+const TX_DIRECTIONS: ReadonlyArray<DirectionChoice<TxType>> = [
+  {
+    value: "credit",
+    label: "Money in",
+    copy: "A deposit, payment received, or top-up",
+    color: "var(--green)",
+    onColor: "var(--on-green)",
+    icon: <ArrowUpIcon className="w-4 h-4" />,
+    sign: 1,
+  },
+  {
+    value: "debit",
+    label: "Money out",
+    copy: "A withdrawal, purchase, or transfer out",
+    color: "var(--red)",
+    onColor: "var(--on-red)",
+    icon: <ArrowDownIcon className="w-4 h-4" />,
+    sign: -1,
+  },
 ];
 
 const ACCOUNT_ICONS = {
@@ -45,7 +61,6 @@ const formatDate = (value: string) =>
     day: "2-digit", month: "short", year: "numeric",
   });
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AccountDetailModal({
   account, onClose, onAccountUpdate, onAccountDelete,
@@ -56,12 +71,6 @@ export default function AccountDetailModal({
   const [loadingTxs, setLoadingTxs] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [balanceMinor, setBalanceMinor] = useState(account.balanceMinor);
-
-  const [txType, setTxType] = useState<TxType>("credit");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [txDate, setTxDate] = useState(today);
-  const [submitting, setSubmitting] = useState(false);
 
   const [deletingTx, setDeletingTx] = useState<string | null>(null);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
@@ -104,35 +113,23 @@ export default function AccountDetailModal({
     [transactions]
   );
 
-  const handleAddTx = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!amount || Number(amount) <= 0) {
-      toast.error("Enter an amount greater than zero.");
-      return;
-    }
+  /*
+   * Throws rather than swallowing: `TransactionWizard` keeps the entry on
+   * screen and shows the message when the promise rejects, so a failed save
+   * must not resolve.
+   */
+  const handleAddTx = async (draft: TransactionDraft<TxType>) => {
+    const result = await api<{ balanceMinor: number; txCount: number }>(
+      `/api/wallet/${account._id}/tx`,
+      {
+        method: "POST",
+        body: { type: draft.type, amount: draft.amount, note: draft.note, date: draft.date },
+      }
+    );
 
-    setSubmitting(true);
-    try {
-      const result = await api<{ balanceMinor: number; txCount: number }>(
-        `/api/wallet/${account._id}/tx`,
-        {
-          method: "POST",
-          body: { type: txType, amount, note: note.trim(), date: txDate },
-        }
-      );
-
-      onAccountUpdate({ ...account, balanceMinor: result.balanceMinor, txCount: result.txCount });
-      await fetchTransactions();
-
-      setAmount("");
-      setNote("");
-      setTxDate(today());
-      toast.success("Transaction recorded.");
-    } catch (error) {
-      toast.error(errorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
+    onAccountUpdate({ ...account, balanceMinor: result.balanceMinor, txCount: result.txCount });
+    await fetchTransactions();
+    toast.success("Transaction recorded.");
   };
 
   const handleDeleteTx = async (txId: string) => {
@@ -224,55 +221,11 @@ export default function AccountDetailModal({
         {/* ── Add transaction ── */}
         <div className="px-5 sm:px-6 py-4 flex-shrink-0 border-b border-line">
           <p className="text-eyebrow mb-3">Add transaction</p>
-          <form onSubmit={handleAddTx} className="flex flex-col gap-2.5">
-            <SegmentedToggle
-              segments={TX_SEGMENTS}
-              value={txType}
-              onChange={setTxType}
-              ariaLabel="Transaction direction"
-            />
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none text-ink-muted">
-                  ৳
-                </span>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  placeholder="Amount"
-                  aria-label="Amount"
-                  min="0.01"
-                  step="0.01"
-                  className="input-dark pl-8"
-                />
-              </div>
-              <input
-                type="date"
-                value={txDate}
-                onChange={(event) => setTxDate(event.target.value)}
-                aria-label="Transaction date"
-                className="input-dark sm:w-40"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Note (optional)"
-                aria-label="Note"
-                maxLength={200}
-                className="input-dark flex-1"
-              />
-              <button type="submit" disabled={submitting} className="btn-primary px-5 flex-shrink-0">
-                {submitting ? <SpinnerIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
-                Add
-              </button>
-            </div>
-          </form>
+          <TransactionWizard
+            directions={TX_DIRECTIONS}
+            directionLabel="Transaction direction"
+            onSubmit={handleAddTx}
+          />
         </div>
 
         {/* ── History ── */}

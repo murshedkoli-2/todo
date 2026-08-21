@@ -12,6 +12,7 @@ import PriorityFlag from "@/components/ui/PriorityFlag";
 import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { api, errorMessage } from "@/lib/apiClient";
+import { useServerData } from "@/hooks/useServerData";
 import { formatDueLabel, isPastDue } from "@/lib/dueDate";
 import type { Todo, WalletAccount, LedgerPersonWithBalance } from "@/lib/types";
 import type { CreateTodoInput } from "@/lib/schemas/todo";
@@ -57,7 +58,7 @@ export default function OverviewClient({
   const { data: session } = useSession();
   const toast = useToast();
 
-  const [todos, setTodos] = useState<Todo[]>(initialTodos);
+  const [todos, setTodos] = useServerData<Todo[]>(initialTodos);
   const [counts, setCounts] = useState<Record<string, number>>(taskCounts);
 
   const userName = session?.user?.name ? session.user.name.split(" ")[0] : "there";
@@ -182,7 +183,7 @@ export default function OverviewClient({
       </div>
 
       {/* ── Top Metric Cards ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 animate-stagger">
         <StatCard
           icon={<WalletIcon className="w-5 h-5" />}
           label="Total Net Worth"

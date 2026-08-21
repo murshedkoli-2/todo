@@ -12,6 +12,7 @@ import Money from "@/components/ui/Money";
 import {
   ArrowUpIcon, ArrowDownIcon, UsersIcon, PlusIcon, ChevronRightIcon,
 } from "@/components/ui/icons";
+import { useServerData } from "@/hooks/useServerData";
 
 interface LedgerClientProps {
   initialPersons: LedgerPersonWithBalance[];
@@ -60,7 +61,7 @@ function sortPersons(
  * position promoted to a single hero number above them.
  */
 export default function LedgerClient({ initialPersons }: LedgerClientProps) {
-  const [persons, setPersons] = useState<LedgerPersonWithBalance[]>(initialPersons);
+  const [persons, setPersons] = useServerData<LedgerPersonWithBalance[]>(initialPersons);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<LedgerPersonWithBalance | null>(null);
   const [search, setSearch] = useState("");
@@ -132,7 +133,7 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
             </p>
           </section>
 
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-stagger">
             {[
               {
                 label: "Total receivable",

@@ -96,8 +96,10 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
     try {
       await api(`/api/todos/${todo._id}`, { method: "DELETE" });
       toast.success("Task deleted.");
-      router.push("/tasks");
+      // Invalidate before navigating: a push straight to `/tasks` can be served
+      // from Next's client Router Cache, which still lists this task.
       router.refresh();
+      router.push("/tasks");
     } catch (caught: unknown) {
       setError(errorMessage(caught));
       setDeleting(false);

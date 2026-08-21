@@ -5,8 +5,25 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import AuthLayout from "@/components/auth/AuthLayout";
-import { AlertIcon, CheckIcon, SpinnerIcon } from "@/components/ui/icons";
+import Stepper from "@/components/ui/wizard/Stepper";
+import WizardPanel from "@/components/ui/wizard/WizardPanel";
+import { useWizard, WizardStepDef } from "@/components/ui/wizard/useWizard";
+import {
+  AlertIcon, CheckIcon, SpinnerIcon, ChevronLeftIcon, ChevronRightIcon,
+} from "@/components/ui/icons";
 
+/** Cheap shape check only — the server is the authority on whether it exists. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Log in, as two steps: identify yourself, then prove it.
+ *
+ * Splitting a two-field form looks like ceremony until you notice what the
+ * second screen can then do — it names the account being entered, so a typo in
+ * the address is caught before the password is typed rather than surfacing as
+ * "incorrect email or password" afterwards, which is the least useful error
+ * message in software.
+ */
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -15,6 +32,18 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const steps: WizardStepDef[] = [
+    {
+      id: "email",
+      label: "Email",
+      validate: () =>
+        EMAIL_PATTERN.test(email.trim()) ? null : "Enter a valid email address.",
+    },
+    { id: "password", label: "Password" },
+  ];
+
+  const wizard = useWizard(steps);
 
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
@@ -26,6 +55,9 @@ function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!wizard.isLast) { wizard.next(); return; }
+    if (!password) { setError("Enter your password."); return; }
+
     setError("");
     setSuccess("");
     setLoading(true);
@@ -63,7 +95,11 @@ function LoginForm() {
   return (
     <AuthLayout
       title="Welcome back"
-      description="Log in to pick up where you left off."
+      description={
+        wizard.isLast
+          ? "One more thing — your password."
+          : "Log in to pick up where you left off."
+      }
       footer={
         <>
           Don&apos;t have an account?{" "}
@@ -73,10 +109,14 @@ function LoginForm() {
         </>
       }
     >
-      {error && (
+      <div className="mb-5">
+        <Stepper wizard={wizard} compact />
+      </div>
+
+      {(error || wizard.error) && (
         <p className="alert-error mb-4 animate-fade-in" role="alert">
           <AlertIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          {error}
+          {error || wizard.error}
         </p>
       )}
       {success && (
@@ -86,49 +126,76 @@ function LoginForm() {
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label htmlFor="login-email" className="field-label">Email address</label>
-          <input
-            id="login-email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="input-dark"
-            required
-            autoFocus
-          />
-        </div>
+      <form onSubmit={handleSubmit} noValidate>
+        <WizardPanel wizard={wizard}>
+          {wizard.current.id === "email" ? (
+            <div>
+              <label htmlFor="login-email" className="field-label">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="input-dark !h-12"
+                required
+                autoFocus
+              />
+            </div>
+          ) : (
+            <div>
+              {/* Naming the account here is the point of the split. */}
+              <div className="well px-3.5 py-2.5 mb-4 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium truncate text-ink">{email.trim()}</span>
+                <button
+                  type="button"
+                  onClick={wizard.back}
+                  className="text-xs font-semibold flex-shrink-0 hover:underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Change
+                </button>
+              </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="login-password" className="field-label !mb-0">Password</label>
-            <Link
-              href="/forgot-password"
-              className="text-xs font-semibold hover:underline"
-              style={{ color: "var(--accent)" }}
-            >
-              Forgot password?
-            </Link>
-          </div>
-          <input
-            id="login-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="input-dark"
-            required
-          />
-        </div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-password" className="field-label !mb-0">Password</label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-semibold hover:underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="input-dark !h-12"
+                required
+                autoFocus
+              />
+            </div>
+          )}
+        </WizardPanel>
 
-        <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-          {loading && <SpinnerIcon className="w-4 h-4" />}
-          {loading ? "Logging in…" : "Log in"}
-        </button>
+        <div className="flex items-center gap-3 mt-5">
+          {!wizard.isFirst && (
+            <button type="button" onClick={wizard.back} disabled={loading} className="btn-outline">
+              <ChevronLeftIcon className="w-4 h-4" />
+              Back
+            </button>
+          )}
+          <button type="submit" disabled={loading} className="btn-primary flex-1">
+            {loading && <SpinnerIcon className="w-4 h-4" />}
+            <span>{loading ? "Logging in…" : wizard.isLast ? "Log in" : "Continue"}</span>
+            {!wizard.isLast && <ChevronRightIcon className="w-4 h-4" />}
+          </button>
+        </div>
       </form>
     </AuthLayout>
   );

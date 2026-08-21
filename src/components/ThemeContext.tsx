@@ -24,12 +24,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // applied the stored preference before first paint, so this only syncs state.
   const [theme, setTheme] = useState<Theme>("light");
 
+  /*
+   * Whether the stored preference has been read yet.
+   *
+   * The state above has to start as `light` so the client's first render
+   * matches the server's, but that meant the apply-effect below ran once with
+   * `light` before the read-effect had a chance to correct it — repainting the
+   * page light and writing `"light"` over the stored `"dark"`, on every single
+   * load. A dark-mode user saw the flash the inline script exists to prevent.
+   *
+   * Gating the apply-effect on this leaves the pre-paint class alone until the
+   * provider actually knows what the preference is.
+   */
+  const [hydrated, setHydrated] = useState(false);
+
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "dark" || stored === "light") setTheme(stored);
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     const root = document.documentElement;
 
     // Suppress transitions across the swap so no element stays painted in the
@@ -45,7 +61,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const timer = setTimeout(() => root.classList.remove(SWITCHING_CLASS), SWITCHING_RESET_MS);
     return () => clearTimeout(timer);
-  }, [theme]);
+  }, [theme, hydrated]);
 
   const toggleTheme = useCallback(
     () => setTheme((prev) => (prev === "dark" ? "light" : "dark")),

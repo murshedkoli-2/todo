@@ -38,6 +38,7 @@ export default defineConfig({
         "src/lib/dueDate.ts",
         "src/lib/quickAdd.ts",
         "src/lib/payment.ts",
+        "src/lib/wizard.ts",
       ],
       thresholds: {
         lines: 80,

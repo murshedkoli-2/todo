@@ -34,7 +34,7 @@ export default function TaskList({
 }: TaskListProps) {
   return (
     <div className="statement">
-      <ul>
+      <ul className="animate-stagger">
         {todos.map((todo) => {
           const displayStatus = getDisplayStatus(todo);
           const isDone = todo.status === "completed";
