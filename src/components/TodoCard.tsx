@@ -3,6 +3,7 @@
 import {
   Todo, getDisplayStatus, STATUS_LABELS,
   STATUS_COLORS, STATUS_TEXT_COLORS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TEXT_COLORS,
+  SERVICE_SHORT_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS, subtaskProgress,
 } from "@/lib/types";
 import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
@@ -104,6 +105,41 @@ export default function TodoCard({
             {todo.title}
           </button>
         </h3>
+
+        {/*
+          Services sit directly under the title rather than in the meta row
+          below, because on this desk they *are* what the task is — the row
+          of due date and attachment counts is context around them.
+        */}
+        {todo.subtasks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {todo.subtasks.map(({ service, done }) => (
+              <span
+                key={service}
+                className="pill"
+                style={{
+                  background: `color-mix(in srgb, ${SERVICE_COLORS[service]} 14%, transparent)`,
+                  color: SERVICE_TEXT_COLORS[service],
+                  /* A finished leg is struck through rather than dropped: the
+                     card has to keep showing everything the customer brought,
+                     or a task with two of three collected looks like a
+                     different, smaller job than the one they left. */
+                  textDecoration: done ? "line-through" : undefined,
+                  opacity: done ? 0.65 : undefined,
+                }}
+              >
+                {SERVICE_SHORT_LABELS[service]}
+              </span>
+            ))}
+            {/* Only once something has actually been ticked — a bare "0/3" on
+                every new task is noise on the busiest surface in the app. */}
+            {subtaskProgress(todo.subtasks).done > 0 && (
+              <span className="text-[11px] font-semibold text-ink-muted">
+                {subtaskProgress(todo.subtasks).done}/{todo.subtasks.length} done
+              </span>
+            )}
+          </div>
+        )}
 
         {todo.description && (
           <p className="text-[13px] leading-relaxed line-clamp-2 mt-1.5 text-ink-secondary">

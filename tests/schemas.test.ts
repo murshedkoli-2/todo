@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  createTodoSchema, imageUrl, todoListQuerySchema, updateTodoSchema,
+  createTodoSchema, imageUrl, taskServiceList, TASK_SERVICES,
+  todoListQuerySchema, updateTodoSchema,
 } from "@/lib/schemas/todo";
 import { createEntrySchema, createPersonSchema } from "@/lib/schemas/ledger";
 import { createAccountSchema, createTxSchema } from "@/lib/schemas/wallet";
@@ -85,6 +86,127 @@ describe("createTodoSchema", () => {
     expect(createTodoSchema.parse({ title: "A", paymentCurrency: "usd" }).paymentCurrency)
       .toBe("USD");
   });
+
+  test("defaults to no services", () => {
+    expect(createTodoSchema.parse({ title: "A" }).services).toEqual([]);
+  });
+
+  test("accepts several services on one task", () => {
+    // The whole point of the field: one customer, two errands, one task.
+    const parsed = createTodoSchema.parse({
+      title: "A",
+      services: ["new_nid", "police_clearance"],
+    });
+    expect(parsed.services).toEqual(["new_nid", "police_clearance"]);
+  });
+
+  test("rejects a service outside the catalogue", () => {
+    expect(createTodoSchema.safeParse({ title: "A", services: ["driving_licence"] }).success)
+      .toBe(false);
+  });
+});
+
+describe("subtask validation", () => {
+  test("defaults to no sub-tasks", () => {
+    expect(createTodoSchema.parse({ title: "A" }).subtasks).toEqual([]);
+  });
+
+  test("accepts a sub-task carrying its service's fields", () => {
+    const parsed = createTodoSchema.parse({
+      title: "A",
+      services: ["birth_certificate_correction"],
+      subtasks: [
+        {
+          service: "birth_certificate_correction",
+          done: true,
+          fields: { birth_number: "19998812345678901", date_of_birth: "1999-08-12" },
+        },
+      ],
+    });
+    expect(parsed.subtasks[0].fields.birth_number).toBe("19998812345678901");
+    expect(parsed.subtasks[0].done).toBe(true);
+  });
+
+  test("defaults done and fields so a bare tick is valid", () => {
+    const parsed = createTodoSchema.parse({
+      title: "A",
+      services: ["new_nid"],
+      subtasks: [{ service: "new_nid" }],
+    });
+    expect(parsed.subtasks[0]).toEqual({ service: "new_nid", done: false, fields: {} });
+  });
+
+  test("rejects a sub-task for a service outside the catalogue", () => {
+    const result = createTodoSchema.safeParse({
+      title: "A",
+      subtasks: [{ service: "driving_licence" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects an unknown key on the sub-task itself", () => {
+    // `.strict()` here, unlike the field map, because the sub-task shape is
+    // fixed — an extra key is a caller bug, not a catalogue that moved on.
+    const result = createTodoSchema.safeParse({
+      title: "A",
+      subtasks: [{ service: "new_nid", notes: "x" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a field value long enough to bloat a document", () => {
+    const result = createTodoSchema.safeParse({
+      title: "A",
+      subtasks: [{ service: "new_nid", fields: { applicant_name: "x".repeat(5000) } }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a non-string field value", () => {
+    const result = createTodoSchema.safeParse({
+      title: "A",
+      subtasks: [{ service: "new_nid", fields: { applicant_name: { $ne: null } } }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects more sub-tasks than there are services", () => {
+    const flood = Array.from({ length: TASK_SERVICES.length + 1 }, () => ({
+      service: "new_nid",
+    }));
+    expect(createTodoSchema.safeParse({ title: "A", subtasks: flood }).success).toBe(false);
+  });
+
+  test("accepts an empty sub-task array so a selection can be cleared", () => {
+    expect(updateTodoSchema.parse({ subtasks: [] }).subtasks).toEqual([]);
+  });
+});
+
+describe("taskServiceList", () => {
+  test("drops a repeated selection rather than rejecting it", () => {
+    // A double-tap on a chip is a slip, not an error worth failing the save.
+    expect(taskServiceList.parse(["new_nid", "new_nid"])).toEqual(["new_nid"]);
+  });
+
+  test("sorts into catalogue order however the chips were tapped", () => {
+    // Two tasks holding the same work must render the same chips in the same
+    // places, whichever order the counter clerk picked them in.
+    expect(taskServiceList.parse(["police_clearance", "birth_certificate", "new_nid"]))
+      .toEqual(["birth_certificate", "new_nid", "police_clearance"]);
+  });
+
+  test("accepts the whole catalogue at once", () => {
+    expect(taskServiceList.parse([...TASK_SERVICES])).toEqual([...TASK_SERVICES]);
+  });
+
+  test("caps a hostile payload before the dedupe allocates", () => {
+    const flood = Array.from({ length: 51 }, () => "new_nid");
+    expect(taskServiceList.safeParse(flood).success).toBe(false);
+  });
+
+  test("rejects a non-array value", () => {
+    expect(taskServiceList.safeParse("new_nid").success).toBe(false);
+  });
 });
 
 describe("updateTodoSchema", () => {
@@ -114,6 +236,17 @@ describe("updateTodoSchema", () => {
     const tooMany = Array.from({ length: 21 }, (_, i) => `https://i.ibb.co/x/${i}.png`);
     expect(updateTodoSchema.safeParse({ images: tooMany }).success).toBe(false);
   });
+
+  test("accepts an empty services array so a selection can be cleared", () => {
+    // Distinct from omitting the key: `[]` means "this task has no services
+    // any more", which the service layer has to write rather than skip.
+    const parsed = updateTodoSchema.parse({ services: [] });
+    expect(parsed.services).toEqual([]);
+  });
+
+  test("rejects a service outside the catalogue", () => {
+    expect(updateTodoSchema.safeParse({ services: ["visa"] }).success).toBe(false);
+  });
 });
 
 describe("todoListQuerySchema", () => {
@@ -125,6 +258,13 @@ describe("todoListQuerySchema", () => {
 
   test("caps the page size so a single request cannot scan everything", () => {
     expect(todoListQuerySchema.safeParse({ limit: "5000" }).success).toBe(false);
+  });
+
+  test("accepts a service filter and rejects an unknown one", () => {
+    expect(todoListQuerySchema.parse({ service: "new_passport" }).service)
+      .toBe("new_passport");
+    expect(todoListQuerySchema.safeParse({ service: "trade_licence" }).success)
+      .toBe(false);
   });
 });
 

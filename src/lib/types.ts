@@ -7,8 +7,18 @@
  */
 
 export type {
-  TodoStatus, PaymentStatus, TodoPriority, PaymentMethod,
+  TodoStatus, PaymentStatus, TodoPriority, PaymentMethod, TaskService,
 } from "@/lib/schemas/todo";
+export { TASK_SERVICES } from "@/lib/schemas/todo";
+export {
+  MAX_FIELD_LENGTH, SERVICE_FIELDS, fieldDef, hasSecretField,
+} from "@/lib/serviceCatalogue";
+export type { ServiceFieldDef, ServiceFieldType } from "@/lib/serviceCatalogue";
+export {
+  SECRET_MASK, describeSubtaskFields, missingFieldCount, normalizeSubtasks,
+  subtaskProgress,
+} from "@/lib/subtasks";
+export type { DescribedField, TaskSubtask } from "@/lib/subtasks";
 export type { EntryType } from "@/lib/schemas/ledger";
 export type { AccountType, TxType } from "@/lib/schemas/wallet";
 
@@ -27,8 +37,9 @@ export type {
 
 import { isPastDue } from "@/lib/dueDate";
 import type { TodoDTO } from "@/lib/dto/todo";
+import { TASK_SERVICES as SERVICE_CATALOGUE } from "@/lib/schemas/todo";
 import type {
-  PaymentMethod, PaymentStatus, TodoPriority, TodoStatus,
+  PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
 import type { AccountType } from "@/lib/schemas/wallet";
 
@@ -140,6 +151,111 @@ export const PAYMENT_METHOD_COLORS: Record<PaymentMethod, string> = {
   bank: "var(--accent)",
   other: "var(--text-secondary)",
 };
+
+/* ── Services ─────────────────────────────────────────────────────────────
+   The standing catalogue of jobs the desk handles. A task carries a set of
+   these, so every table below is keyed by the same enum the schema validates
+   against — adding a service is one entry in `TASK_SERVICES` plus one row in
+   each table here, and TypeScript flags the rows that were missed. */
+
+export const SERVICE_LABELS: Record<TaskService, string> = {
+  birth_certificate: "Birth Certificate",
+  birth_certificate_correction: "Birth Certificate Correction",
+  new_nid: "New NID",
+  nid_correction: "NID Correction",
+  new_passport: "New Passport",
+  passport_correction: "Passport Correction",
+  police_clearance: "Police Clearance",
+  bmet_registration: "BMET Registration",
+  training_admission: "Training Admission",
+};
+
+/**
+ * Compact form for card chips, where three of these sit side by side and the
+ * full names wrap into a paragraph.
+ */
+export const SERVICE_SHORT_LABELS: Record<TaskService, string> = {
+  birth_certificate: "Birth Cert.",
+  birth_certificate_correction: "Birth Fix",
+  new_nid: "New NID",
+  nid_correction: "NID Fix",
+  new_passport: "Passport",
+  passport_correction: "Passport Fix",
+  police_clearance: "Police Clr.",
+  bmet_registration: "BMET",
+  training_admission: "Training",
+};
+
+/** One line of what the job actually is, shown under the label in the picker. */
+export const SERVICE_DESCRIPTIONS: Record<TaskService, string> = {
+  birth_certificate: "Registering a birth or getting a certified copy.",
+  birth_certificate_correction: "Amending a name, date, or parentage on a registered birth.",
+  new_nid: "First-time national ID registration.",
+  nid_correction: "Fixing a name, date, or address on an existing NID.",
+  new_passport: "A first passport or a renewal.",
+  passport_correction: "Amending details on an issued passport.",
+  police_clearance: "Police verification certificate.",
+  bmet_registration: "Manpower registration for overseas employment.",
+  training_admission: "Enrolling on a training course.",
+};
+
+/**
+ * Colour by document family rather than one per service. Nine services and six
+ * palette families means sharing, and the sharing is the point: each pair that
+ * shares a colour is one errand's "new" and "correction" halves, and the last
+ * pair is the two legs of going abroad for work. Reading those as one group is
+ * how the work is actually sorted at the counter.
+ */
+export const SERVICE_COLORS: Record<TaskService, string> = {
+  birth_certificate: "var(--green)",
+  birth_certificate_correction: "var(--green)",
+  new_nid: "var(--accent)",
+  nid_correction: "var(--accent)",
+  new_passport: "var(--purple)",
+  passport_correction: "var(--purple)",
+  police_clearance: "var(--orange)",
+  bmet_registration: "var(--yellow)",
+  training_admission: "var(--yellow)",
+};
+
+/** Service text on its own pale tint. See {@link STATUS_TEXT_COLORS}. */
+export const SERVICE_TEXT_COLORS: Record<TaskService, string> = {
+  birth_certificate: "var(--green-ink)",
+  birth_certificate_correction: "var(--green-ink)",
+  new_nid: "var(--accent-ink)",
+  nid_correction: "var(--accent-ink)",
+  new_passport: "var(--purple-ink)",
+  passport_correction: "var(--purple-ink)",
+  police_clearance: "var(--orange-ink)",
+  bmet_registration: "var(--yellow-ink)",
+  training_admission: "var(--yellow-ink)",
+};
+
+/**
+ * The colour to print *on* a solid {@link SERVICE_COLORS} fill — the picker's
+ * checkmark sits on one. White clears AA on the accent and the purple and fails
+ * on the green, the orange, and the yellow, so the partner token is looked up
+ * rather than assumed. See {@link ACCOUNT_TYPE_ON_COLORS}.
+ */
+export const SERVICE_ON_COLORS: Record<TaskService, string> = {
+  birth_certificate: "var(--on-green)",
+  birth_certificate_correction: "var(--on-green)",
+  new_nid: "var(--on-accent)",
+  nid_correction: "var(--on-accent)",
+  new_passport: "var(--on-purple)",
+  passport_correction: "var(--on-purple)",
+  police_clearance: "var(--on-orange)",
+  bmet_registration: "var(--on-yellow)",
+  training_admission: "var(--on-yellow)",
+};
+
+/** Every service, in catalogue order — the order the picker renders them. */
+export const SERVICE_CHOICES: readonly TaskService[] = SERVICE_CATALOGUE;
+
+/** Joins a task's services into one line, for dense rows and summaries. */
+export function formatServices(services: readonly TaskService[]): string {
+  return services.map((service) => SERVICE_LABELS[service]).join(", ");
+}
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: "Unpaid",

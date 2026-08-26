@@ -38,11 +38,39 @@ async function login(page: Page) {
  */
 async function fillTaskWizard(
   page: Page,
-  fields: { title?: string; description?: string; total?: string; paid?: string; method?: string }
+  fields: {
+    title?: string;
+    description?: string;
+    services?: string[];
+    /** Sub-task answers, keyed by the visible field label. */
+    subtaskFields?: Record<string, string>;
+    /** Services to tick off as finished on the sub-task cards. */
+    done?: string[];
+    total?: string;
+    paid?: string;
+    method?: string;
+  }
 ) {
   await expectStep(page, "details");
   if (fields.title !== undefined) await page.getByLabel("Title").fill(fields.title);
   if (fields.description !== undefined) await page.getByLabel(/Description/).fill(fields.description);
+
+  await continueTo(page, "services");
+  for (const service of fields.services ?? []) {
+    await page.getByRole("checkbox", { name: service, exact: true }).click();
+  }
+  /* Filled by label, not by key: the whole point of the step is that ticking a
+     service surfaces the questions that service asks, so addressing them the
+     way the operator sees them is what actually proves the wiring. */
+  for (const [label, value] of Object.entries(fields.subtaskFields ?? {})) {
+    await page.getByLabel(label, { exact: true }).fill(value);
+  }
+  for (const service of fields.done ?? []) {
+    await page
+      .locator(`[data-subtask="${service}"]`)
+      .getByRole("checkbox", { name: "Done" })
+      .check();
+  }
 
   await continueThrough(page, "schedule", "payment");
   if (fields.total !== undefined) await page.getByLabel(/^Total cost/).fill(fields.total);
@@ -63,6 +91,11 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   await fillTaskWizard(page, {
     title,
     description: "Created by the end-to-end suite.",
+    // Two at once: the field exists because one customer routinely brings more
+    // than one errand, and picking them in reverse catalogue order proves the
+    // selection is normalised rather than stored as tapped.
+    services: ["Police Clearance", "New NID"],
+    subtaskFields: { "Applicant name": "Rahim Uddin" },
     total: "1234.56",
   });
   await continueThrough(page, "attachments", "review");
@@ -71,6 +104,10 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   // entered across four screens, before anything is written.
   const review = page.locator(".wizard-panel[data-step='review']");
   await expect(review).toContainText(title);
+  await expect(review).toContainText("New NID, Police Clearance");
+  // The review lists what each sub-task captured, not just which boxes are
+  // ticked — that is the half most likely to have gone to the wrong service.
+  await expect(review).toContainText("Applicant name: Rahim Uddin");
   await expect(review).toContainText("৳1,234.56");
 
   await page.getByRole("button", { name: "Create task" }).click();
@@ -94,14 +131,27 @@ test("creates, edits, and deletes a task", async ({ page }) => {
 
   // The amount must render through the shared money formatter, not raw.
   await expect(card).toContainText("৳1,234.56");
+  // Cards carry the short labels, so the full names must not be asserted here.
+  await expect(card).toContainText("New NID");
+  await expect(card).toContainText("Police Clr.");
 
   await card.getByRole("button", { name: `Edit ${title}` }).click();
   await expectStep(page, "details");
   await page.getByLabel("Title").fill(`${title} (edited)`);
+  await continueTo(page, "services");
+  // The edit form loads the saved selection, so both chips arrive checked and
+  // this second click clears one — a merge on the server would leave it set.
+  await expect(page.getByRole("checkbox", { name: "New NID", exact: true })).toBeChecked();
+  // And it loads what each sub-task captured, not only which boxes were ticked.
+  await expect(page.getByLabel("Applicant name", { exact: true })).toHaveValue("Rahim Uddin");
+  await page.getByRole("checkbox", { name: "Police Clearance", exact: true }).click();
   await continueThrough(page, "schedule", "payment", "attachments", "review");
   await page.getByRole("button", { name: "Save changes" }).click();
 
-  await expect(page.getByRole("article", { name: `${title} (edited)` })).toBeVisible();
+  const edited = page.getByRole("article", { name: `${title} (edited)` });
+  await expect(edited).toBeVisible();
+  await expect(edited).toContainText("New NID");
+  await expect(edited).not.toContainText("Police Clr.");
 
   await page
     .getByRole("article", { name: `${title} (edited)` })
@@ -114,6 +164,68 @@ test("creates, edits, and deletes a task", async ({ page }) => {
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
 
   await expect(page.getByRole("article", { name: `${title} (edited)` })).toBeHidden();
+});
+
+test("captures per-service information as sub-tasks, and hides the credential", async ({ page }) => {
+  const title = `E2E subtasks ${stamp()}`;
+
+  await page.goto("/tasks/new");
+  await fillTaskWizard(page, {
+    title,
+    /* The two services the desk asks extra questions of: a birth correction
+       needs the number on the certificate and the date it currently shows, and
+       a NID correction needs the customer's own portal password. */
+    services: ["Birth Certificate Correction", "NID Correction"],
+    subtaskFields: {
+      "Birth registration number": "19998812345678901",
+      "Date of birth": "1999-08-12",
+      "NID number": "1234567890",
+      "NID portal password": "counter-secret",
+    },
+    done: ["birth_certificate_correction"],
+  });
+
+  await continueThrough(page, "attachments", "review");
+
+  const review = page.locator(".wizard-panel[data-step='review']");
+  await expect(review).toContainText("Birth registration number: 19998812345678901");
+  await expect(review).toContainText("NID number: 1234567890");
+  // Masked on the summary. The value is only ever legible in the field itself,
+  // behind a deliberate press.
+  await expect(review).not.toContainText("counter-secret");
+  await expect(review).toContainText("1/2 done");
+
+  await page.getByRole("button", { name: "Create task" }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.getByRole("listitem").filter({ hasText: title })
+    .getByRole("button", { name: title }).click();
+  await expect(page).toHaveURL(/\/tasks\/[a-f0-9]{24}/);
+
+  // The checklist on the task page carries what was captured, and its progress.
+  await expect(page.getByText("Sub-tasks (2)")).toBeVisible();
+  await expect(page.getByText("1 of 2 done")).toBeVisible();
+  await expect(page.getByText("19998812345678901")).toBeVisible();
+  await expect(page.getByText("counter-secret")).toBeHidden();
+
+  // Revealing is per-field and takes a press.
+  await page.getByRole("button", { name: "Show NID portal password" }).click();
+  await expect(page.getByText("counter-secret")).toBeVisible();
+
+  // Ticking the remaining leg persists on its own, without opening the editor.
+  const nidRow = page.locator('[data-subtask="nid_correction"]');
+  await nidRow.getByRole("checkbox").click();
+  await expect(page.getByText("2 of 2 done")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("2 of 2 done")).toBeVisible();
+  await expect(nidRow).toHaveAttribute("data-done", "true");
+
+  // Clean up so reruns do not accumulate tasks holding a password.
+  await page.getByRole("link", { name: "Edit task" }).click();
+  await page.getByRole("button", { name: "Delete task" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("derives due and payment status from the total and what has been paid", async ({ page }) => {
@@ -143,7 +255,7 @@ test("derives due and payment status from the total and what has been paid", asy
 
   // Settling it flips the derived status with no status control involved.
   await page.getByRole("link", { name: "Edit task" }).click();
-  await continueThrough(page, "schedule", "payment");
+  await continueThrough(page, "services", "schedule", "payment");
   await page.getByLabel(/^Paid so far/).fill("13500");
   await expect(page.getByText("Paid", { exact: true })).toBeVisible();
   await continueThrough(page, "attachments", "review");

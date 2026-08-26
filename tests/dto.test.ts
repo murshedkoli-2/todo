@@ -41,6 +41,98 @@ describe("toTodoDTO", () => {
     expect(toTodoDTO({ ...base, paymentAmountMinor: 0 }).paymentAmountMinor).toBe(0);
   });
 
+  test("passes a stored service set through unchanged", () => {
+    const dto = toTodoDTO({ ...base, services: ["new_nid", "police_clearance"] });
+    expect(dto.services).toEqual(["new_nid", "police_clearance"]);
+  });
+
+  test("gives every stored service a sub-task row", () => {
+    const dto = toTodoDTO({ ...base, services: ["new_nid", "police_clearance"] });
+    expect(dto.subtasks.map((s) => s.service)).toEqual(dto.services);
+  });
+
+  test("rebuilds captured fields from the stored pair array", () => {
+    const dto = toTodoDTO({
+      ...base,
+      services: ["birth_certificate_correction"],
+      subtasks: [
+        {
+          service: "birth_certificate_correction",
+          done: true,
+          fields: [{ key: "birth_number", value: "19998812345678901" }],
+        },
+      ],
+    });
+    expect(dto.subtasks[0]).toEqual({
+      service: "birth_certificate_correction",
+      done: true,
+      fields: { birth_number: "19998812345678901" },
+    });
+  });
+
+  test("keeps a credential on the single-task read, where it is needed", () => {
+    const dto = toTodoDTO({
+      ...base,
+      services: ["nid_correction"],
+      subtasks: [
+        { service: "nid_correction", done: false, fields: [{ key: "password", value: "s3cret" }] },
+      ],
+    });
+    expect(dto.subtasks[0].fields.password).toBe("s3cret");
+  });
+
+  test("strips a credential when the caller asks for redaction", () => {
+    // What the list endpoint does. A password has no business riding along in
+    // a response that only needed titles.
+    const dto = toTodoDTO(
+      {
+        ...base,
+        services: ["nid_correction"],
+        subtasks: [
+          {
+            service: "nid_correction",
+            done: false,
+            fields: [
+              { key: "nid_number", value: "123" },
+              { key: "password", value: "s3cret" },
+            ],
+          },
+        ],
+      },
+      "Me",
+      { redactSecrets: true }
+    );
+    expect(dto.subtasks[0].fields).toEqual({ nid_number: "123" });
+    expect(JSON.stringify(dto)).not.toContain("s3cret");
+  });
+
+  test("drops a sub-task whose service is no longer selected", () => {
+    // Guards the one way the two stored fields can disagree.
+    const dto = toTodoDTO({
+      ...base,
+      services: ["new_nid"],
+      subtasks: [
+        { service: "nid_correction", done: false, fields: [{ key: "password", value: "s3cret" }] },
+        { service: "new_nid", done: false, fields: [] },
+      ],
+    });
+    expect(dto.subtasks.map((s) => s.service)).toEqual(["new_nid"]);
+    expect(JSON.stringify(dto)).not.toContain("s3cret");
+  });
+
+  test("reads a task written before services existed as an empty set", () => {
+    // The field is absent on every pre-migration document; the client branches
+    // on `.length`, so it must arrive as an array rather than undefined.
+    expect(toTodoDTO(base).services).toEqual([]);
+  });
+
+  test("drops a value that is no longer in the catalogue", () => {
+    // A retired service would otherwise reach the client as a key with no
+    // label and render as a blank chip.
+    const dto = toTodoDTO({ ...base, services: ["new_nid", "trade_licence"] });
+    expect(dto.services).toEqual(["new_nid"]);
+  });
+
   test("defaults missing collections and codes", () => {
     const dto = toTodoDTO(base);
     expect(dto.images).toEqual([]);

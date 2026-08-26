@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Todo, getDisplayStatus, STATUS_LABELS, DisplayStatus, PRIORITY_RANK,
+  formatServices, describeSubtaskFields,
 } from "@/lib/types";
 import { tallyByStatus } from "@/lib/taskInsights";
 import type { TodoPriority, TodoStatus } from "@/lib/schemas/todo";
@@ -55,6 +56,31 @@ const isViewMode = (value: string): value is ViewMode => VIEW_MODES.includes(val
 const FILTERS: ReadonlyArray<"all" | DisplayStatus> = [
   "all", "todo", "in_progress", "completed", "overdue",
 ];
+
+
+/**
+ * The text of a task that a search may look inside.
+ *
+ * Services are matched by their *label*, not their stored key: someone looking
+ * for passport work types "passport", not "new_passport". Sub-task values are
+ * included because a document number is often the only thing the caller on the
+ * phone can give you — but they come from `describeSubtaskFields`, which masks
+ * credentials, so a password is never matchable and never assembled into a
+ * string that could end up in a log or a URL.
+ */
+function searchableText(todo: Todo): string {
+  const fields = todo.subtasks
+    .flatMap((subtask) => describeSubtaskFields(subtask))
+    .filter((field) => !field.secret)
+    .map((field) => field.value);
+
+  return [
+    todo.title,
+    todo.description ?? "",
+    formatServices(todo.services),
+    ...fields,
+  ].join(" ").toLowerCase();
+}
 
 /** Sorts a copy so the source list stays untouched. */
 function sortTodos(todos: Todo[], key: SortKey): Todo[] {
@@ -133,10 +159,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
         statusFilter === "all"
           ? Boolean(query) || status !== "completed"
           : status === statusFilter;
-      const matchesSearch =
-        !query ||
-        todo.title.toLowerCase().includes(query) ||
-        (todo.description?.toLowerCase().includes(query) ?? false);
+      const matchesSearch = !query || searchableText(todo).includes(query);
       return matchesStatus && matchesSearch;
     });
     return sortTodos(filtered, sortKey);
@@ -146,12 +169,9 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
      out from under it — only search and the explicit filter apply. */
   const boardTodos = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return todos.filter(
-      (todo) =>
-        !query ||
-        todo.title.toLowerCase().includes(query) ||
-        (todo.description?.toLowerCase().includes(query) ?? false)
-    );
+    /* Same matcher as the list, so a query that finds a task in one view does
+       not come up empty in the other. */
+    return todos.filter((todo) => !query || searchableText(todo).includes(query));
   }, [todos, search]);
 
   const allCaughtUp =

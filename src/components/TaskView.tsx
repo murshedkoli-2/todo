@@ -9,6 +9,7 @@ import {
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
+  TaskService,
 } from "@/lib/types";
 import { isPastDue as dueDayHasPassed } from "@/lib/dueDate";
 import { api, errorMessage } from "@/lib/apiClient";
@@ -19,6 +20,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Money from "@/components/ui/Money";
 import PriorityFlag from "@/components/ui/PriorityFlag";
 import TaskCover from "@/components/ui/TaskCover";
+import SubtaskChecklist from "@/components/task/SubtaskChecklist";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   EditIcon, TrashIcon, CalendarIcon, AlertIcon, CheckIcon, CloseIcon, SpinnerIcon,
@@ -87,6 +89,43 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
       toast.error(errorMessage(caught));
     } finally {
       setChangingStatus(false);
+    }
+  };
+
+  /*
+   * Ticking one leg of the errand off.
+   *
+   * The whole array goes back rather than a patch for the one row, because
+   * `subtasks` is reconciled against `services` server-side and a partial array
+   * would read as "these are the only services now" and delete the rest.
+   *
+   * That makes this correct only because the detail page is served by
+   * `getTodo`, which does *not* redact credentials — sending the array back
+   * from a list payload would save the masked version over the real password.
+   * Any future surface that offers this tick must load the task the same way.
+   *
+   * Applied optimistically and rolled back on failure, the same way the status
+   * pills above do — a checklist that pauses on every tick is worse than one
+   * that occasionally has to undo.
+   */
+  const handleSubtaskToggle = async (service: TaskService) => {
+    const previous = todo;
+    const subtasks = todo.subtasks.map((subtask) =>
+      subtask.service === service ? { ...subtask, done: !subtask.done } : subtask
+    );
+
+    setTodo((current) => ({ ...current, subtasks }));
+
+    try {
+      const updated = await api<Todo>(`/api/todos/${todo._id}`, {
+        method: "PATCH",
+        body: { services: todo.services, subtasks },
+      });
+      setTodo(updated);
+      router.refresh();
+    } catch (caught: unknown) {
+      setTodo(previous);
+      toast.error(errorMessage(caught));
     }
   };
 
@@ -176,6 +215,14 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
               <span>Updated {formatDateTime(todo.updatedAt)}</span>
             </div>
           </section>
+
+          {todo.subtasks.length > 0 && (
+            <SubtaskChecklist
+              subtasks={todo.subtasks}
+              onToggleDone={handleSubtaskToggle}
+              busy={deleting}
+            />
+          )}
 
           <section className="panel">
             <h2 className="text-eyebrow mb-3">Description</h2>

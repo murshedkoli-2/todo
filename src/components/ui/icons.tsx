@@ -246,6 +246,22 @@ export const BoltIcon = (p: IconProps) => (
   <Icon {...p}><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12l1-8z" /></Icon>
 );
 
+/* Reveal controls for the credential fields a sub-task can carry. */
+export const EyeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);
+
+export const EyeOffIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10.6 6.7A8.9 8.9 0 0112 6.5c6 0 9.5 5.5 9.5 5.5a16 16 0 01-3.2 3.8M6.6 8.2A16 16 0 002.5 12S6 17.5 12 17.5c1.3 0 2.4-.2 3.5-.6" />
+    <path d="M9.9 9.9a3 3 0 004.2 4.2" />
+    <path d="M3.5 3.5l17 17" />
+  </Icon>
+);
+
 export const SpinnerIcon = ({ className = "", ...p }: IconProps) => (
   <svg
     viewBox="0 0 24 24"

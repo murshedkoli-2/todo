@@ -2,6 +2,7 @@
 
 import {
   Todo, getDisplayStatus, STATUS_COLORS, STATUS_LABELS, STATUS_TEXT_COLORS,
+  SERVICE_SHORT_LABELS, SERVICE_TEXT_COLORS,
 } from "@/lib/types";
 import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
@@ -74,8 +75,28 @@ export default function TaskList({
                 >
                   {todo.title}
                 </span>
-                {todo.description && (
+                {/*
+                  One subtitle line, so services take the front of it: on this
+                  desk they identify the row better than the first few words of
+                  a description, which is what the line held on its own before.
+                */}
+                {(todo.subtasks.length > 0 || todo.description) && (
                   <span className="block text-xs truncate mt-0.5 text-ink-muted">
+                    {todo.subtasks.map(({ service, done }, index) => (
+                      <span key={service}>
+                        {index > 0 && <span className="text-ink-muted"> · </span>}
+                        <span
+                          className="font-semibold"
+                          style={{
+                            color: SERVICE_TEXT_COLORS[service],
+                            textDecoration: done ? "line-through" : undefined,
+                          }}
+                        >
+                          {SERVICE_SHORT_LABELS[service]}
+                        </span>
+                      </span>
+                    ))}
+                    {todo.subtasks.length > 0 && todo.description && " — "}
                     {todo.description}
                   </span>
                 )}

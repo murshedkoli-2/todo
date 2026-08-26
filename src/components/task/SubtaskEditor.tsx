@@ -1,0 +1,272 @@
+"use client";
+
+import { useState } from "react";
+import {
+  TaskService, TaskSubtask, ServiceFieldDef,
+  SERVICE_FIELDS, SERVICE_LABELS, SERVICE_DESCRIPTIONS,
+  SERVICE_COLORS, SERVICE_TEXT_COLORS, SERVICE_ON_COLORS,
+  TASK_SERVICES, MAX_FIELD_LENGTH, missingFieldCount,
+} from "@/lib/types";
+import { CheckIcon, EyeIcon, EyeOffIcon } from "@/components/ui/icons";
+
+interface SubtaskEditorProps {
+  /** One row per ticked service, already in catalogue order. */
+  subtasks: TaskSubtask[];
+  onToggleService: (service: TaskService) => void;
+  onFieldChange: (service: TaskService, key: string, value: string) => void;
+  onToggleDone: (service: TaskService) => void;
+}
+
+/**
+ * The wizard's Services step: tick a job, then answer what that job asks for.
+ *
+ * Ticking and answering are one screen rather than two because they are one
+ * decision — the questions only exist because of the tick, and a separate step
+ * for them would be blank for anyone who ticked nothing, which is a real
+ * fraction of tasks. Keeping them together also means the answer fields appear
+ * the moment the box is checked, which is the whole affordance: it is visibly a
+ * sub-task being opened, not a form growing for no reason.
+ *
+ * The picker stays a grid at the top and the sub-tasks stack underneath rather
+ * than each tile expanding in place, because an expanding cell in a two-column
+ * grid shoves its neighbour down and the row just clicked jumps away from the
+ * cursor.
+ */
+export default function SubtaskEditor({
+  subtasks, onToggleService, onFieldChange, onToggleDone,
+}: SubtaskEditorProps) {
+  const selected = new Set(subtasks.map((subtask) => subtask.service));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <span className="field-label">
+          Services <span className="font-normal text-ink-muted">(optional)</span>
+        </span>
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+          role="group"
+          aria-label="Services"
+        >
+          {TASK_SERVICES.map((service) => {
+            const active = selected.has(service);
+            const color = SERVICE_COLORS[service];
+            return (
+              <button
+                key={service}
+                type="button"
+                role="checkbox"
+                aria-checked={active}
+                /* Named by the label alone and described by the line under it.
+                   Letting the button's own text supply the name would run the
+                   two together into one long announcement. */
+                aria-labelledby={`service-${service}-label`}
+                aria-describedby={`service-${service}-desc`}
+                onClick={() => onToggleService(service)}
+                className="option-tile !flex-row !items-start !justify-start !text-left !py-3 !px-3.5 gap-3"
+                data-selected={active}
+                style={
+                  active
+                    ? {
+                        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+                        borderColor: color,
+                        color: "var(--text-primary)",
+                      }
+                    : undefined
+                }
+              >
+                {/*
+                  A real box rather than a tick that only appears when selected:
+                  an empty square reads as "choosable", which is what makes the
+                  row a multi-select at a glance instead of a radio.
+                */}
+                <span
+                  className="w-4 h-4 mt-0.5 rounded-[5px] flex-shrink-0 flex items-center justify-center transition-colors duration-fast"
+                  style={{
+                    background: active ? color : "transparent",
+                    border: `1.5px solid ${active ? color : "var(--border-hover)"}`,
+                    color: SERVICE_ON_COLORS[service],
+                  }}
+                >
+                  {active && <CheckIcon className="w-2.5 h-2.5" />}
+                </span>
+
+                <span className="min-w-0">
+                  <span
+                    id={`service-${service}-label`}
+                    className="block text-[13px] font-bold leading-tight"
+                    style={{ color: active ? SERVICE_TEXT_COLORS[service] : "var(--text-primary)" }}
+                  >
+                    {SERVICE_LABELS[service]}
+                  </span>
+                  <span
+                    id={`service-${service}-desc`}
+                    className="block text-[11px] leading-snug mt-0.5 text-ink-muted"
+                  >
+                    {SERVICE_DESCRIPTIONS[service]}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <span className="field-hint">
+          {subtasks.length === 0
+            ? "Pick every job this task covers — a customer often brings more than one. Each becomes a sub-task below."
+            : `${subtasks.length} selected · each one is a sub-task below.`}
+        </span>
+      </div>
+
+      {subtasks.length > 0 && (
+        <div className="flex flex-col gap-3" data-testid="subtask-editor-list">
+          <span className="field-label">Sub-tasks ({subtasks.length})</span>
+          {subtasks.map((subtask, index) => (
+            <SubtaskCard
+              key={subtask.service}
+              subtask={subtask}
+              index={index}
+              onFieldChange={onFieldChange}
+              onToggleDone={onToggleDone}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SubtaskCardProps {
+  subtask: TaskSubtask;
+  index: number;
+  onFieldChange: (service: TaskService, key: string, value: string) => void;
+  onToggleDone: (service: TaskService) => void;
+}
+
+function SubtaskCard({ subtask, index, onFieldChange, onToggleDone }: SubtaskCardProps) {
+  const { service } = subtask;
+  const color = SERVICE_COLORS[service];
+  const definitions = SERVICE_FIELDS[service];
+  const missing = missingFieldCount(subtask);
+
+  return (
+    <section
+      className="well p-4 flex flex-col gap-3.5"
+      aria-labelledby={`subtask-${service}-heading`}
+      data-subtask={service}
+      style={{ borderLeft: `3px solid ${color}` }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3
+            id={`subtask-${service}-heading`}
+            className="text-[13px] font-bold leading-tight"
+            style={{ color: SERVICE_TEXT_COLORS[service] }}
+          >
+            <span className="text-ink-muted font-normal">{index + 1}. </span>
+            {SERVICE_LABELS[service]}
+          </h3>
+          <p className="text-[11px] mt-0.5 text-ink-muted">
+            {missing === 0
+              ? "Everything asked for has been filled in."
+              : `${missing} of ${definitions.length} still blank — you can save and come back.`}
+          </p>
+        </div>
+
+        {/* Ticked off when that leg of the errand is finished, which is what
+            makes the list a checklist rather than a summary. */}
+        <label className="flex items-center gap-2 flex-shrink-0 cursor-pointer text-[12px] font-semibold text-ink-muted select-none">
+          <input
+            type="checkbox"
+            checked={subtask.done}
+            onChange={() => onToggleDone(service)}
+            className="w-4 h-4 accent-[var(--accent)] cursor-pointer"
+          />
+          Done
+        </label>
+      </div>
+
+      {definitions.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {definitions.map((definition) => (
+            <SubtaskField
+              key={definition.key}
+              service={service}
+              definition={definition}
+              value={subtask.fields[definition.key] ?? ""}
+              onChange={onFieldChange}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface SubtaskFieldProps {
+  service: TaskService;
+  definition: ServiceFieldDef;
+  value: string;
+  onChange: (service: TaskService, key: string, value: string) => void;
+}
+
+function SubtaskField({ service, definition, value, onChange }: SubtaskFieldProps) {
+  const [revealed, setRevealed] = useState(false);
+  const isSecret = definition.type === "secret";
+  const id = `subtask-${service}-${definition.key}`;
+  const helpId = definition.help ? `${id}-help` : undefined;
+
+  const inputType = definition.type === "date"
+    ? "date"
+    : isSecret && !revealed
+      ? "password"
+      : "text";
+
+  return (
+    <div className={isSecret ? "sm:col-span-2" : undefined}>
+      <label htmlFor={id} className="field-label">
+        {definition.label}
+      </label>
+
+      <div className={isSecret ? "relative" : undefined}>
+        <input
+          id={id}
+          type={inputType}
+          value={value}
+          onChange={(event) => onChange(service, definition.key, event.target.value)}
+          placeholder={definition.placeholder}
+          maxLength={MAX_FIELD_LENGTH}
+          aria-describedby={helpId}
+          /*
+           * A customer's credential must not be offered to the operator's own
+           * password manager, nor filled from it — this box belongs to whoever
+           * is standing at the counter, not to whoever is signed in.
+           * `new-password` is what actually suppresses both in Chrome and
+           * Safari; `off` alone is widely ignored.
+           */
+          autoComplete={isSecret ? "new-password" : "off"}
+          spellCheck={isSecret ? false : undefined}
+          data-1p-ignore={isSecret ? "" : undefined}
+          className={`input-dark ${isSecret ? "!pr-11" : ""}`}
+        />
+
+        {isSecret && (
+          <button
+            type="button"
+            onClick={() => setRevealed((current) => !current)}
+            aria-pressed={revealed}
+            aria-label={revealed ? `Hide ${definition.label}` : `Show ${definition.label}`}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-ink-muted hover:text-ink transition-colors duration-fast"
+          >
+            {revealed ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+
+      {definition.help && (
+        <span id={helpId} className="field-hint">
+          {definition.help}
+        </span>
+      )}
+    </div>
+  );
+}

@@ -1,12 +1,27 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
+import { MAX_FIELD_LENGTH, TASK_SERVICES as SERVICE_CATALOGUE } from "@/lib/serviceCatalogue";
 import {
-  PAYMENT_METHODS, PAYMENT_STATUSES, TODO_PRIORITIES, TODO_STATUSES,
+  PAYMENT_METHODS, PAYMENT_STATUSES, TASK_SERVICES, TODO_PRIORITIES, TODO_STATUSES,
 } from "@/lib/schemas/todo";
 import type {
-  PaymentMethod, PaymentStatus, TodoPriority, TodoStatus,
+  PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
 
-export type { PaymentMethod, PaymentStatus, TodoPriority, TodoStatus };
+export type { PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus };
+
+/**
+ * A ticked service and its captured information.
+ *
+ * `fields` is a pair array rather than a keyed object — see the note on
+ * `StoredField` in `lib/subtasks.ts` for why. Both halves are plain strings
+ * here and are reconciled against the field catalogue on the way in and out,
+ * so a key retired from the catalogue stops rendering without a migration.
+ */
+export interface ITodoSubtask {
+  service: TaskService;
+  done: boolean;
+  fields: Array<{ key: string; value: string }>;
+}
 
 export interface ITodo extends Document {
   userId: Types.ObjectId;
@@ -15,6 +30,14 @@ export interface ITodo extends Document {
   status: TodoStatus;
   priority: TodoPriority;
   dueDate?: Date;
+  /** Catalogue jobs this task covers. See `TASK_SERVICES`. */
+  services: TaskService[];
+  /**
+   * One row per entry in `services`, holding what was captured for that job.
+   * Kept in step with `services` by `normalizeSubtasks` — never written
+   * independently of it.
+   */
+  subtasks: ITodoSubtask[];
   images: string[];
   featureImage?: string;
   /** The job's total cost, in integer minor units (paisa). See `src/lib/money.ts`. */
@@ -29,6 +52,38 @@ export interface ITodo extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+/* `_id: false` because a sub-task is identified by its service, not by an id of
+   its own — and the whole array is replaced on every write, so generated ids
+   would churn on each save and mean nothing. */
+const SubtaskFieldSchema = new Schema<{ key: string; value: string }>(
+  {
+    key: { type: String, required: true, trim: true, maxlength: 64 },
+    value: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [MAX_FIELD_LENGTH, `A value cannot exceed ${MAX_FIELD_LENGTH} characters`],
+    },
+  },
+  { _id: false }
+);
+
+const SubtaskSchema = new Schema<ITodoSubtask>(
+  {
+    service: {
+      type: String,
+      required: true,
+      enum: {
+        values: SERVICE_CATALOGUE,
+        message: "{VALUE} is not a service this desk offers",
+      },
+    },
+    done: { type: Boolean, default: false },
+    fields: { type: [SubtaskFieldSchema], default: [] },
+  },
+  { _id: false }
+);
 
 const TodoSchema = new Schema<ITodo>(
   {
@@ -65,6 +120,26 @@ const TodoSchema = new Schema<ITodo>(
       default: "none",
     },
     dueDate: { type: Date },
+    services: {
+      type: [String],
+      enum: {
+        values: TASK_SERVICES,
+        message: "{VALUE} is not a service this desk offers",
+      },
+      default: [],
+    },
+    subtasks: {
+      type: [SubtaskSchema],
+      default: [],
+      /* One row per service at most, enforced by `normalizeSubtasks` before the
+         write. The bound is here as well because this is the last gate before
+         the document, and an unbounded array is how a document grows without
+         limit. */
+      validate: {
+        validator: (value: ITodoSubtask[]) => value.length <= SERVICE_CATALOGUE.length,
+        message: "A task cannot hold more sub-tasks than there are services",
+      },
+    },
     images: {
       type: [String],
       default: [],
@@ -127,6 +202,9 @@ TodoSchema.index({ userId: 1, status: 1, createdAt: -1 });
 TodoSchema.index({ userId: 1, dueDate: 1 });
 /* Serves the "urgent work first" sort, which is the default triage view. */
 TodoSchema.index({ userId: 1, priority: -1, dueDate: 1 });
+/* Multikey index behind the per-service filter — without it, asking for every
+   open passport correction is a collection scan. */
+TodoSchema.index({ userId: 1, services: 1, createdAt: -1 });
 
 const Todo: Model<ITodo> =
   mongoose.models.Todo || mongoose.model<ITodo>("Todo", TodoSchema);

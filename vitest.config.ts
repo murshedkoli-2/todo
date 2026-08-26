@@ -39,6 +39,8 @@ export default defineConfig({
         "src/lib/quickAdd.ts",
         "src/lib/payment.ts",
         "src/lib/wizard.ts",
+        "src/lib/serviceCatalogue.ts",
+        "src/lib/subtasks.ts",
       ],
       thresholds: {
         lines: 80,

@@ -4,11 +4,13 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  Todo, TodoStatus, TodoPriority, PaymentMethod,
+  Todo, TodoStatus, TodoPriority, PaymentMethod, TaskService, TaskSubtask,
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
   PRIORITY_CHOICES, PRIORITY_LABELS, PRIORITY_COLORS,
   PAYMENT_METHOD_CHOICES, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_COLORS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
+  SERVICE_LABELS, formatServices, describeSubtaskFields, normalizeSubtasks,
+  subtaskProgress,
 } from "@/lib/types";
 import { api, errorMessage } from "@/lib/apiClient";
 import { fromMinor, toMinor } from "@/lib/money";
@@ -19,6 +21,7 @@ import AppShell from "@/components/shell/AppShell";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import OptionCard from "@/components/ui/OptionCard";
+import SubtaskEditor from "@/components/task/SubtaskEditor";
 import Stepper from "@/components/ui/wizard/Stepper";
 import WizardPanel from "@/components/ui/wizard/WizardPanel";
 import WizardFooter from "@/components/ui/wizard/WizardFooter";
@@ -50,7 +53,7 @@ const STATUS_COPY: Record<TodoStatus, string> = {
 };
 
 /**
- * Creating and editing a task, as a five-step wizard.
+ * Creating and editing a task, as a six-step wizard.
  *
  * The form this replaced put eleven fields on one screen across three panels,
  * ten of them optional. The title — the only thing actually required — carried
@@ -59,8 +62,13 @@ const STATUS_COPY: Record<TodoStatus, string> = {
  * and lets the required field own its own.
  *
  * Only step one can block progress. Every later step is skippable in a single
- * press, so adding a bare title still costs four keystrokes and four clicks,
+ * press, so adding a bare title still costs four keystrokes and five clicks,
  * and the review screen at the end restores the overview the split gave up.
+ *
+ * Services get a screen of their own rather than a corner of step one, because
+ * ticking one is not a single decision: each tick opens a sub-task with its own
+ * questions — a birth number, a date, a portal password — and nine of those
+ * unfolding underneath the title field would bury the one required input.
  */
 export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
   const router = useRouter();
@@ -72,6 +80,12 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
   const [status, setStatus]                 = useState<TodoStatus>(todo?.status ?? "todo");
   const [priority, setPriority]             = useState<TodoPriority>(todo?.priority ?? "none");
   const [dueDate, setDueDate]               = useState(todo?.dueDate ? todo.dueDate.slice(0, 10) : "");
+  /* One piece of state, not two. `services` is derived from this on the way
+     out, so a ticked job can never be missing its sub-task and a sub-task can
+     never survive its job being unticked. */
+  const [subtasks, setSubtasks]             = useState<TaskSubtask[]>(
+    () => normalizeSubtasks(todo?.services ?? [], todo?.subtasks ?? []).subtasks
+  );
   const [images, setImages]                 = useState<string[]>(todo?.images ?? []);
   const [featureImage, setFeatureImage]     = useState<string>(todo?.featureImage ?? "");
   // Stored in minor units; the fields edit major units, converted on submit.
@@ -155,6 +169,47 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
     if (e.dataTransfer.files?.length) await handleFiles(e.dataTransfer.files);
   };
 
+  /* ── Sub-tasks ───────────────────────────────────────────────────────── */
+
+  /*
+   * Untick then re-tick discards whatever was typed against that service.
+   *
+   * The alternative — parking the values in case the tick comes back — means a
+   * password the operator deliberately removed is silently still in the payload
+   * on save, which is the wrong default for a field holding a credential.
+   * Rebuilt through `normalizeSubtasks` so the rows stay in catalogue order
+   * however the tiles were tapped, matching the order the server stores.
+   */
+  const toggleService = (service: TaskService) => {
+    setSubtasks((current) => {
+      const next = current.some((subtask) => subtask.service === service)
+        ? current.filter((subtask) => subtask.service !== service)
+        : [...current, { service, done: false, fields: {} }];
+      return normalizeSubtasks(next.map((subtask) => subtask.service), next).subtasks;
+    });
+  };
+
+  const setSubtaskField = (service: TaskService, key: string, value: string) => {
+    setSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.service === service
+          ? { ...subtask, fields: { ...subtask.fields, [key]: value } }
+          : subtask
+      )
+    );
+  };
+
+  const toggleSubtaskDone = (service: TaskService) => {
+    setSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.service === service ? { ...subtask, done: !subtask.done } : subtask
+      )
+    );
+  };
+
+  const services = subtasks.map((subtask) => subtask.service);
+  const progress = subtaskProgress(subtasks);
+
   const removeImage = (url: string) => {
     const next = images.filter((u) => u !== url);
     setImages(next);
@@ -177,8 +232,14 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
     {
       id: "details",
       label: "Details",
-      description: "Start with what has to happen. Everything after this is optional.",
+      description: "Start with what has to happen. The title is the only thing required.",
       validate: () => (title.trim() ? null : "A title is required."),
+    },
+    {
+      id: "services",
+      label: "Services",
+      description:
+        "Tick every job this task covers. Each one opens a sub-task asking for what that job needs.",
     },
     {
       id: "schedule",
@@ -232,6 +293,8 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
         status,
         priority,
         dueDate: dueDate || null,
+        services,
+        subtasks,
         images,
         featureImage: featureImage || null,
         // Sent in major units; the schema converts to integer minor units.
@@ -350,7 +413,17 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                   </div>
                 )}
 
-                {/* ── 2. Schedule ────────────────────────────────────── */}
+                {/* ── 2. Services ────────────────────────────────────── */}
+                {wizard.current.id === "services" && (
+                  <SubtaskEditor
+                    subtasks={subtasks}
+                    onToggleService={toggleService}
+                    onFieldChange={setSubtaskField}
+                    onToggleDone={toggleSubtaskDone}
+                  />
+                )}
+
+                {/* ── 3. Schedule ────────────────────────────────────── */}
                 {wizard.current.id === "schedule" && (
                   <div className="flex flex-col gap-6">
                     <div>
@@ -430,7 +503,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                   </div>
                 )}
 
-                {/* ── 3. Payment ─────────────────────────────────────── */}
+                {/* ── 4. Payment ─────────────────────────────────────── */}
                 {wizard.current.id === "payment" && (
                   <div className="flex flex-col gap-5">
                     <div>
@@ -549,7 +622,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                   </div>
                 )}
 
-                {/* ── 4. Attachments ─────────────────────────────────── */}
+                {/* ── 5. Attachments ─────────────────────────────────── */}
                 {wizard.current.id === "attachments" && (
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
@@ -709,7 +782,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                   </div>
                 )}
 
-                {/* ── 5. Review ──────────────────────────────────────── */}
+                {/* ── 6. Review ──────────────────────────────────────── */}
                 {wizard.current.id === "review" && (
                   <ReviewList
                     onEdit={wizard.goTo}
@@ -723,6 +796,34 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                         stepIndex: 0,
                       },
                       {
+                        key: "services",
+                        label: "Services",
+                        value:
+                          progress.total > 0
+                            ? `${formatServices(services)} · ${progress.done}/${progress.total} done`
+                            : "",
+                        empty: progress.total === 0,
+                        stepIndex: 1,
+                      },
+                      /* One row per sub-task, so the review screen shows what
+                         was actually captured and not just which boxes were
+                         ticked — that is the half most likely to be wrong, and
+                         a password typed into the wrong service is invisible
+                         from the chip list alone. Values are masked here; the
+                         reveal lives on the field itself. */
+                      ...subtasks.map((subtask) => {
+                        const described = describeSubtaskFields(subtask);
+                        return {
+                          key: `subtask-${subtask.service}`,
+                          label: `↳ ${SERVICE_LABELS[subtask.service]}`,
+                          value: described
+                            .map((field) => `${field.label}: ${field.value}`)
+                            .join(" · "),
+                          empty: described.length === 0,
+                          stepIndex: 1,
+                        };
+                      }),
+                      {
                         key: "status",
                         label: "Status",
                         value: (
@@ -730,21 +831,21 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                             {STATUS_LABELS[status]}
                           </span>
                         ),
-                        stepIndex: 1,
+                        stepIndex: 2,
                       },
                       {
                         key: "priority",
                         label: "Priority",
                         value: PRIORITY_LABELS[priority],
                         empty: priority === "none",
-                        stepIndex: 1,
+                        stepIndex: 2,
                       },
                       {
                         key: "due",
                         label: "Due date",
                         value: dueDate ? formatDueLabel(dueDate) : "",
                         empty: !dueDate,
-                        stepIndex: 1,
+                        stepIndex: 2,
                       },
                       {
                         key: "total",
@@ -756,7 +857,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                             ""
                           ),
                         empty: totalMinor == null,
-                        stepIndex: 2,
+                        stepIndex: 3,
                       },
                       {
                         key: "due-amount",
@@ -773,14 +874,14 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                             ""
                           ),
                         empty: due == null,
-                        stepIndex: 2,
+                        stepIndex: 3,
                       },
                       {
                         key: "images",
                         label: "Images",
                         value: `${images.length} attached${featureImage ? " · cover set" : ""}`,
                         empty: images.length === 0,
-                        stepIndex: 3,
+                        stepIndex: 4,
                       },
                     ]}
                   />

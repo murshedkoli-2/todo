@@ -3,6 +3,7 @@ import Todo from "@/models/Todo";
 import { toTodoDTO, type TodoDTO } from "@/lib/dto/todo";
 import { NotFoundError } from "@/lib/api/errors";
 import { derivePaymentStatus } from "@/lib/payment";
+import { normalizeSubtasks, toStoredSubtasks } from "@/lib/subtasks";
 import type {
   CreateTodoInput, TodoListQuery, UpdateTodoInput,
 } from "@/lib/schemas/todo";
@@ -24,11 +25,14 @@ function escapeRegex(input: string): string {
 
 export async function listTodos(
   userId: string,
-  { page, limit, status, priority, search }: TodoListQuery
+  { page, limit, status, priority, service, search }: TodoListQuery
 ): Promise<TodoPage> {
   const filter: Record<string, unknown> = { userId: new Types.ObjectId(userId) };
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
+  // Equality against an array field matches any element, which is what the
+  // multikey index on `services` is built to serve.
+  if (service) filter.services = service;
   if (search) {
     const pattern = new RegExp(escapeRegex(search), "i");
     filter.$or = [{ title: pattern }, { description: pattern }];
@@ -44,7 +48,11 @@ export async function listTodos(
   ]);
 
   return {
-    todos: documents.map((document) => toTodoDTO(document)),
+    /* Credentials are stripped here and only here: the list is the one place
+       that returns many tasks at once, and none of its surfaces render a
+       password. The single-task read keeps them, because that is the screen
+       the operator actually needs one on. */
+    todos: documents.map((document) => toTodoDTO(document, "Me", { redactSecrets: true })),
     pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
   };
 }
@@ -59,6 +67,11 @@ export async function createTodo(
   userId: string,
   input: CreateTodoInput
 ): Promise<TodoDTO> {
+  /* The two service fields are produced together and never separately, so a
+     sub-task for a job that was not ticked cannot be stored and a ticked job
+     cannot end up without a row. */
+  const { services, subtasks } = normalizeSubtasks(input.services, input.subtasks);
+
   const todo = await Todo.create({
     userId: new Types.ObjectId(userId),
     title: input.title,
@@ -66,6 +79,8 @@ export async function createTodo(
     status: input.status,
     priority: input.priority,
     dueDate: input.dueDate ?? undefined,
+    services,
+    subtasks: toStoredSubtasks(subtasks),
     images: input.images,
     // A feature image the caller did not upload into `images` would render a
     // cover with no matching gallery entry, so it is folded in here.
@@ -101,6 +116,23 @@ export async function updateTodo(
   if (input.paymentCurrency !== undefined) set.paymentCurrency = input.paymentCurrency;
   if (input.paymentMethod !== undefined) set.paymentMethod = input.paymentMethod;
   if (input.images !== undefined) set.images = input.images;
+  /*
+   * Replaces the set outright rather than merging: the picker always submits
+   * the full selection, so a merge would make deselection impossible.
+   *
+   * `subtasks` is reconciled against `services` and both are written together.
+   * A patch carrying only `subtasks` is reconciled against the services in that
+   * same payload — which is what the form always sends — rather than against
+   * what is stored, so this never needs an extra read.
+   */
+  if (input.services !== undefined || input.subtasks !== undefined) {
+    const { services, subtasks } = normalizeSubtasks(
+      input.services ?? input.subtasks?.map((subtask) => subtask.service) ?? [],
+      input.subtasks
+    );
+    set.services = services;
+    set.subtasks = toStoredSubtasks(subtasks);
+  }
 
   if ("description" in input) assign("description", input.description);
   if ("dueDate" in input) assign("dueDate", input.dueDate);
