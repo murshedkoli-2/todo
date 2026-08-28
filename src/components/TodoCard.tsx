@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import {
-  Todo, getDisplayStatus, STATUS_LABELS,
+  Todo, TaskService, getDisplayStatus, STATUS_LABELS,
   STATUS_COLORS, STATUS_TEXT_COLORS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TEXT_COLORS,
-  SERVICE_SHORT_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS, subtaskProgress,
+  SERVICE_LABELS, SERVICE_SHORT_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS,
+  subtaskProgress,
 } from "@/lib/types";
 import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
@@ -21,6 +23,8 @@ interface TodoCardProps {
   onEdit?: (todo: Todo) => void;
   onView?: (todo: Todo) => void;
   onStatusChange?: (id: string, status: TodoStatus) => void;
+  /** Ticks one leg off. Omitted, the service chips stay plain labels. */
+  onSubtaskToggle?: (id: string, service: TaskService, done: boolean) => Promise<void>;
   /** True while a status change for this card is in flight. */
   pending?: boolean;
 }
@@ -35,9 +39,10 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: TodoStatus; label: string }> = [
 const statusTint = (color: string) => `color-mix(in srgb, ${color} 13%, transparent)`;
 
 export default function TodoCard({
-  todo, onEdit, onView, onStatusChange, pending = false,
+  todo, onEdit, onView, onStatusChange, onSubtaskToggle, pending = false,
 }: TodoCardProps) {
   const menu = useMenu(STATUS_OPTIONS.length);
+  const [ticking, setTicking] = useState<TaskService | null>(null);
 
   const displayStatus = getDisplayStatus(todo);
   const statusColor = STATUS_COLORS[displayStatus];
@@ -47,6 +52,19 @@ export default function TodoCard({
   const handleStatusChange = (nextStatus: TodoStatus) => {
     menu.close();
     if (nextStatus !== todo.status) onStatusChange?.(todo._id, nextStatus);
+  };
+
+  /* The chips already carry each leg's done state; making them the control is
+     cheaper than a second row of checkboxes on a card this dense, and it puts
+     the action where the status it changes is already being read. */
+  const handleSubtaskToggle = async (service: TaskService, done: boolean) => {
+    if (!onSubtaskToggle) return;
+    setTicking(service);
+    try {
+      await onSubtaskToggle(todo._id, service, done);
+    } finally {
+      setTicking(null);
+    }
   };
 
   return (
@@ -112,25 +130,50 @@ export default function TodoCard({
           of due date and attachment counts is context around them.
         */}
         {todo.subtasks.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mt-2">
-            {todo.subtasks.map(({ service, done }) => (
-              <span
-                key={service}
-                className="pill"
-                style={{
-                  background: `color-mix(in srgb, ${SERVICE_COLORS[service]} 14%, transparent)`,
-                  color: SERVICE_TEXT_COLORS[service],
-                  /* A finished leg is struck through rather than dropped: the
-                     card has to keep showing everything the customer brought,
-                     or a task with two of three collected looks like a
-                     different, smaller job than the one they left. */
-                  textDecoration: done ? "line-through" : undefined,
-                  opacity: done ? 0.65 : undefined,
-                }}
-              >
-                {SERVICE_SHORT_LABELS[service]}
-              </span>
-            ))}
+          /* `relative z-10` lifts the chips above the title's stretched hit
+             area, which otherwise swallows every click meant for one. */
+          <div className="relative z-10 flex flex-wrap items-center gap-1.5 mt-2">
+            {todo.subtasks.map(({ service, done }) => {
+              const chipStyle = {
+                background: `color-mix(in srgb, ${SERVICE_COLORS[service]} 14%, transparent)`,
+                color: SERVICE_TEXT_COLORS[service],
+                /* A finished leg is struck through rather than dropped: the
+                   card has to keep showing everything the customer brought,
+                   or a task with two of three collected looks like a
+                   different, smaller job than the one they left. */
+                textDecoration: done ? "line-through" : undefined,
+                opacity: done ? 0.65 : undefined,
+              };
+
+              if (!onSubtaskToggle) {
+                return (
+                  <span key={service} className="pill" style={chipStyle}>
+                    {SERVICE_SHORT_LABELS[service]}
+                  </span>
+                );
+              }
+
+              return (
+                <button
+                  key={service}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={done}
+                  disabled={ticking !== null}
+                  onClick={() => handleSubtaskToggle(service, !done)}
+                  aria-label={`Mark ${SERVICE_LABELS[service]} on ${todo.title} as ${done ? "not done" : "done"}`}
+                  className="pill transition-opacity duration-fast hover:!opacity-100 disabled:opacity-40"
+                  style={chipStyle}
+                  data-subtask={service}
+                  data-done={done}
+                >
+                  {ticking === service
+                    ? <SpinnerIcon className="w-3 h-3" />
+                    : done && <CheckIcon className="w-3 h-3" />}
+                  {SERVICE_SHORT_LABELS[service]}
+                </button>
+              );
+            })}
             {/* Only once something has actually been ticked — a bare "0/3" on
                 every new task is noise on the busiest surface in the app. */}
             {subtaskProgress(todo.subtasks).done > 0 && (

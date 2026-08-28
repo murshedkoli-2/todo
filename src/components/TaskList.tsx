@@ -1,19 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import {
-  Todo, getDisplayStatus, STATUS_COLORS, STATUS_LABELS, STATUS_TEXT_COLORS,
-  SERVICE_SHORT_LABELS, SERVICE_TEXT_COLORS,
+  Todo, TaskService, getDisplayStatus, STATUS_COLORS, STATUS_LABELS, STATUS_TEXT_COLORS,
+  SERVICE_LABELS, SERVICE_SHORT_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS,
+  SERVICE_ON_COLORS, describeSubtaskFields, subtaskProgress,
 } from "@/lib/types";
 import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
 import Money from "@/components/ui/Money";
 import PriorityFlag from "@/components/ui/PriorityFlag";
-import { CalendarIcon, CheckIcon, SpinnerIcon } from "@/components/ui/icons";
+import {
+  CalendarIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, SpinnerIcon,
+} from "@/components/ui/icons";
 
 interface TaskListProps {
   todos: Todo[];
   onView: (todo: Todo) => void;
   onStatusChange: (id: string, status: TodoStatus) => void;
+  /** Ticks one leg of a task off from the list. */
+  onSubtaskToggle: (id: string, service: TaskService, done: boolean) => Promise<void>;
   /** Ids with a status change in flight. */
   pendingIds: ReadonlySet<string>;
 }
@@ -31,8 +37,19 @@ interface TaskListProps {
  * taken on almost every row is "this is done", and it should cost one click.
  */
 export default function TaskList({
-  todos, onView, onStatusChange, pendingIds,
+  todos, onView, onStatusChange, onSubtaskToggle, pendingIds,
 }: TaskListProps) {
+  /* Expansion is per-row and additive — working through a morning's passport
+     collections means keeping several open, not one at a time. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
   return (
     <div className="statement">
       <ul className="animate-stagger">
@@ -42,8 +59,12 @@ export default function TaskList({
           const isOverdue = displayStatus === "overdue";
           const pending = pendingIds.has(todo._id);
 
+          const progress = subtaskProgress(todo.subtasks);
+          const isExpanded = expanded.has(todo._id);
+
           return (
-            <li key={todo._id} className="statement-row gap-3 px-4 sm:px-5 py-3">
+            <li key={todo._id} className="statement-row !flex-col !items-stretch gap-0 px-4 sm:px-5 py-3">
+             <div className="flex items-center gap-3">
               {/* Toggle, not a menu: a list is where work gets closed out. */}
               <button
                 type="button"
@@ -96,6 +117,9 @@ export default function TaskList({
                         </span>
                       </span>
                     ))}
+                    {todo.subtasks.length > 0 && (
+                      <span className="font-semibold"> · {progress.done}/{progress.total}</span>
+                    )}
                     {todo.subtasks.length > 0 && todo.description && " — "}
                     {todo.description}
                   </span>
@@ -135,10 +159,131 @@ export default function TaskList({
                   {STATUS_LABELS[displayStatus]}
                 </span>
               </span>
+
+              {/*
+                The checklist, opened in place. Walking to the task page and
+                back to tick one leg off is the wrong shape for the surface
+                where a whole morning's collections get closed out — and since
+                the checklist now drives the status, this is where most tasks
+                will actually finish.
+              */}
+              {progress.total > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(todo._id)}
+                  className="btn-ghost w-8 h-8 px-0 flex-shrink-0"
+                  aria-expanded={isExpanded}
+                  aria-controls={`subtasks-${todo._id}`}
+                  aria-label={`${isExpanded ? "Hide" : "Show"} the ${progress.total} sub-tasks of ${todo.title}`}
+                >
+                  {isExpanded
+                    ? <ChevronDownIcon className="w-4 h-4" />
+                    : <ChevronRightIcon className="w-4 h-4" />}
+                </button>
+              )}
+             </div>
+
+              {progress.total > 0 && isExpanded && (
+                <SubtaskRows
+                  id={`subtasks-${todo._id}`}
+                  todo={todo}
+                  onToggle={onSubtaskToggle}
+                />
+              )}
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+interface SubtaskRowsProps {
+  id: string;
+  todo: Todo;
+  onToggle: (id: string, service: TaskService, done: boolean) => Promise<void>;
+}
+
+/**
+ * A task's checklist, opened underneath its row.
+ *
+ * Read-only apart from the tick. Editing a captured value belongs on the task
+ * page, where there is room for the field labels and the help text that say
+ * what a number is — a passport number typed into an unlabelled box in a list
+ * row is a number typed into the wrong box. What this surface is for is the
+ * one action that closes work out.
+ *
+ * Credential values never reach here: the list endpoint strips them, so
+ * `describeSubtaskFields` has nothing to mask and nothing to leak.
+ */
+function SubtaskRows({ id, todo, onToggle }: SubtaskRowsProps) {
+  const [saving, setSaving] = useState<TaskService | null>(null);
+
+  const toggle = async (service: TaskService, done: boolean) => {
+    setSaving(service);
+    try {
+      await onToggle(todo._id, service, done);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <ul id={id} className="flex flex-col gap-1.5 mt-2.5 ml-8 sm:ml-9 animate-fade-in">
+      {todo.subtasks.map((subtask) => {
+        const { service, done } = subtask;
+        const color = SERVICE_COLORS[service];
+        const described = describeSubtaskFields(subtask);
+        const busy = saving === service;
+
+        return (
+          <li
+            key={service}
+            className="well px-3 py-2 flex items-center gap-2.5"
+            data-subtask={service}
+            data-done={done}
+            style={{ borderLeft: `3px solid ${color}` }}
+          >
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={done}
+              disabled={busy}
+              onClick={() => toggle(service, !done)}
+              aria-label={`Mark ${SERVICE_LABELS[service]} on ${todo.title} as ${done ? "not done" : "done"}`}
+              className="w-[18px] h-[18px] rounded-md flex-shrink-0 flex items-center justify-center transition-colors duration-fast disabled:opacity-50"
+              style={{
+                background: done ? color : "transparent",
+                border: `1.5px solid ${done ? color : "var(--border-hover)"}`,
+                color: SERVICE_ON_COLORS[service],
+              }}
+            >
+              {busy
+                ? <SpinnerIcon className="w-3 h-3" />
+                : done && <CheckIcon className="w-2.5 h-2.5" />}
+            </button>
+
+            <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
+              <span
+                className="text-xs font-bold"
+                style={{
+                  color: SERVICE_TEXT_COLORS[service],
+                  textDecoration: done ? "line-through" : undefined,
+                }}
+              >
+                {SERVICE_LABELS[service]}
+              </span>
+              {/* One line of what was captured, so the row is identifiable
+                  without opening the task — usually the document number. */}
+              {described.length > 0 && (
+                <span className="text-[11px] truncate text-ink-muted">
+                  {described.map((field) => `${field.label}: ${field.value}`).join(" · ")}
+                </span>
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

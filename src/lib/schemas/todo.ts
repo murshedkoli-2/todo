@@ -194,6 +194,32 @@ export const updateTodoSchema = z
   .strict()
   .refine((body) => Object.keys(body).length > 0, { message: "Nothing to update" });
 
+/**
+ * A change to one sub-task, addressed by its service in the URL.
+ *
+ * The whole-task PATCH replaces `subtasks` outright, which is right for the
+ * form — it always submits the complete picture — and wrong for everything
+ * else. A checklist tick that has to send every sub-task back also has to have
+ * loaded every sub-task first, unredacted, or it saves a task's credential
+ * fields away as it goes. Naming the one row in the URL removes that entirely:
+ * the caller sends what changed, and the parts it never saw stay put.
+ *
+ * `fields` is a partial. A key that is absent is left alone; a key sent blank
+ * is cleared, which is the only spelling of "delete this value" the field
+ * normalizer accepts.
+ */
+export const subtaskPatchSchema = z
+  .object({
+    done: z.boolean(),
+    fields: subtaskFieldMap,
+  })
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: "Nothing to update" });
+
+/** Route params for the per-sub-task endpoint: the task, and which leg of it. */
+export const subtaskParams = z.object({ id: objectId, service: taskServiceSchema });
+
 export const todoImageActionSchema = z
   .object({
     featureImage: imageUrl.nullable().optional(),
@@ -223,3 +249,4 @@ export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
 export type TodoListQuery = z.infer<typeof todoListQuerySchema>;
 export type SubtaskInput = z.infer<typeof subtaskSchema>;
+export type SubtaskPatchInput = z.infer<typeof subtaskPatchSchema>;

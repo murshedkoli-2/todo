@@ -12,6 +12,7 @@ import {
   TaskService,
 } from "@/lib/types";
 import { isPastDue as dueDayHasPassed } from "@/lib/dueDate";
+import { subtaskStatusHint } from "@/lib/taskStatus";
 import { api, errorMessage } from "@/lib/apiClient";
 import AppShell from "@/components/shell/AppShell";
 import Breadcrumb from "@/components/ui/Breadcrumb";
@@ -21,6 +22,7 @@ import Money from "@/components/ui/Money";
 import PriorityFlag from "@/components/ui/PriorityFlag";
 import TaskCover from "@/components/ui/TaskCover";
 import SubtaskChecklist from "@/components/task/SubtaskChecklist";
+import type { SubtaskFields } from "@/components/task/SubtaskChecklist";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   EditIcon, TrashIcon, CalendarIcon, AlertIcon, CheckIcon, CloseIcon, SpinnerIcon,
@@ -95,37 +97,64 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
   /*
    * Ticking one leg of the errand off.
    *
-   * The whole array goes back rather than a patch for the one row, because
-   * `subtasks` is reconciled against `services` server-side and a partial array
-   * would read as "these are the only services now" and delete the rest.
-   *
-   * That makes this correct only because the detail page is served by
-   * `getTodo`, which does *not* redact credentials — sending the array back
-   * from a list payload would save the masked version over the real password.
-   * Any future surface that offers this tick must load the task the same way.
+   * Addressed by service in the URL rather than by sending the whole `subtasks`
+   * array back. The array form only ever worked because this page is served by
+   * `getTodo`, which does not redact credentials — the same call from a list
+   * payload would have saved the redacted copy over the real password. Naming
+   * the one row removes that trap for every caller.
    *
    * Applied optimistically and rolled back on failure, the same way the status
-   * pills above do — a checklist that pauses on every tick is worse than one
-   * that occasionally has to undo.
+   * pills do — a checklist that pauses on every tick is worse than one that
+   * occasionally has to undo. The response carries the whole task because the
+   * tick can complete it: see `lib/taskStatus.ts`.
    */
   const handleSubtaskToggle = async (service: TaskService) => {
     const previous = todo;
-    const subtasks = todo.subtasks.map((subtask) =>
-      subtask.service === service ? { ...subtask, done: !subtask.done } : subtask
-    );
+    const target = todo.subtasks.find((subtask) => subtask.service === service);
+    if (!target) return;
+    const done = !target.done;
 
-    setTodo((current) => ({ ...current, subtasks }));
+    setTodo((current) => ({
+      ...current,
+      subtasks: current.subtasks.map((subtask) =>
+        subtask.service === service ? { ...subtask, done } : subtask
+      ),
+    }));
 
     try {
-      const updated = await api<Todo>(`/api/todos/${todo._id}`, {
-        method: "PATCH",
-        body: { services: todo.services, subtasks },
-      });
+      const updated = await api<Todo>(
+        `/api/todos/${todo._id}/subtasks/${service}`,
+        { method: "PATCH", body: { done } }
+      );
       setTodo(updated);
       router.refresh();
     } catch (caught: unknown) {
       setTodo(previous);
       toast.error(errorMessage(caught));
+    }
+  };
+
+  /*
+   * Correcting what was captured for one job, without the five-step wizard.
+   *
+   * Not optimistic: unlike a tick, the server normalizes what comes back —
+   * trimming, dropping blanks, discarding a key retired from the catalogue —
+   * so showing the draft as saved would show something subtly different from
+   * what was stored. The row is small and the wait is one request.
+   */
+  const handleSubtaskFields = async (service: TaskService, fields: SubtaskFields) => {
+    try {
+      const updated = await api<Todo>(
+        `/api/todos/${todo._id}/subtasks/${service}`,
+        { method: "PATCH", body: { fields } }
+      );
+      setTodo(updated);
+      toast.success("Sub-task updated.");
+      router.refresh();
+    } catch (caught: unknown) {
+      toast.error(errorMessage(caught));
+      // Rethrown so the row stays open with the typing intact to retry.
+      throw caught;
     }
   };
 
@@ -220,6 +249,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
             <SubtaskChecklist
               subtasks={todo.subtasks}
               onToggleDone={handleSubtaskToggle}
+              onSaveFields={handleSubtaskFields}
               busy={deleting}
             />
           )}
@@ -320,6 +350,14 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
                 );
               })}
             </div>
+
+            {/* Said here as well as on the checklist: this is the panel someone
+                reaches for when they wonder why the status moved on its own. */}
+            {todo.subtasks.length > 0 && (
+              <p className="text-[11px] leading-snug mt-3 text-ink-muted">
+                {subtaskStatusHint(todo.subtasks)}
+              </p>
+            )}
           </section>
 
           <section className="panel">

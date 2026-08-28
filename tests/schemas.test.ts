@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  createTodoSchema, imageUrl, taskServiceList, TASK_SERVICES,
-  todoListQuerySchema, updateTodoSchema,
+  createTodoSchema, imageUrl, subtaskParams, subtaskPatchSchema,
+  taskServiceList, TASK_SERVICES, todoListQuerySchema, updateTodoSchema,
 } from "@/lib/schemas/todo";
 import { createEntrySchema, createPersonSchema } from "@/lib/schemas/ledger";
 import { createAccountSchema, createTxSchema } from "@/lib/schemas/wallet";
@@ -179,6 +179,69 @@ describe("subtask validation", () => {
 
   test("accepts an empty sub-task array so a selection can be cleared", () => {
     expect(updateTodoSchema.parse({ subtasks: [] }).subtasks).toEqual([]);
+  });
+});
+
+describe("subtaskPatchSchema", () => {
+  test("accepts a bare tick", () => {
+    expect(subtaskPatchSchema.parse({ done: true })).toEqual({ done: true });
+  });
+
+  test("accepts fields alone, so a value can be corrected without re-ticking", () => {
+    const parsed = subtaskPatchSchema.parse({ fields: { applicant_name: "Rahim" } });
+    expect(parsed.fields).toEqual({ applicant_name: "Rahim" });
+    expect(parsed.done).toBeUndefined();
+  });
+
+  test("accepts a blank value — that is how a captured value is cleared", () => {
+    expect(subtaskPatchSchema.parse({ fields: { applicant_name: "" } }).fields)
+      .toEqual({ applicant_name: "" });
+  });
+
+  test("rejects an empty patch rather than writing nothing and reporting success", () => {
+    expect(subtaskPatchSchema.safeParse({}).success).toBe(false);
+  });
+
+  test("rejects an unknown key", () => {
+    // `.strict()`: a caller sending `{ service }` in the body has misread the
+    // endpoint, which addresses the row by URL. Better a 400 than a silent drop.
+    expect(subtaskPatchSchema.safeParse({ service: "new_nid", done: true }).success)
+      .toBe(false);
+  });
+
+  test("rejects a field value long enough to bloat a document", () => {
+    expect(
+      subtaskPatchSchema.safeParse({ fields: { applicant_name: "x".repeat(5000) } }).success
+    ).toBe(false);
+  });
+
+  test("rejects a non-string field value", () => {
+    expect(
+      subtaskPatchSchema.safeParse({ fields: { applicant_name: { $ne: null } } }).success
+    ).toBe(false);
+  });
+});
+
+describe("subtaskParams", () => {
+  test("takes an object id and a catalogue service from the URL", () => {
+    const parsed = subtaskParams.parse({
+      id: "507f1f77bcf86cd799439011",
+      service: "new_passport",
+    });
+    expect(parsed).toEqual({ id: "507f1f77bcf86cd799439011", service: "new_passport" });
+  });
+
+  test("rejects a service outside the catalogue", () => {
+    expect(
+      subtaskParams.safeParse({
+        id: "507f1f77bcf86cd799439011",
+        service: "driving_licence",
+      }).success
+    ).toBe(false);
+  });
+
+  test("rejects a malformed task id", () => {
+    expect(subtaskParams.safeParse({ id: "nope", service: "new_nid" }).success).toBe(false);
   });
 });
 

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import {
-  TaskService, TaskSubtask, ServiceFieldDef,
+  TaskService, TaskSubtask,
   SERVICE_FIELDS, SERVICE_LABELS, SERVICE_DESCRIPTIONS,
   SERVICE_COLORS, SERVICE_TEXT_COLORS, SERVICE_ON_COLORS,
-  TASK_SERVICES, MAX_FIELD_LENGTH, missingFieldCount,
+  TASK_SERVICES, missingFieldCount,
 } from "@/lib/types";
-import { CheckIcon, EyeIcon, EyeOffIcon } from "@/components/ui/icons";
+import SubtaskFieldInput from "@/components/task/SubtaskFieldInput";
+import { CheckIcon } from "@/components/ui/icons";
 
 interface SubtaskEditorProps {
   /** One row per ticked service, already in catalogue order. */
@@ -188,85 +188,17 @@ function SubtaskCard({ subtask, index, onFieldChange, onToggleDone }: SubtaskCar
       {definitions.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {definitions.map((definition) => (
-            <SubtaskField
+            <SubtaskFieldInput
               key={definition.key}
               service={service}
               definition={definition}
               value={subtask.fields[definition.key] ?? ""}
               onChange={onFieldChange}
+              idPrefix="subtask"
             />
           ))}
         </div>
       )}
     </section>
-  );
-}
-
-interface SubtaskFieldProps {
-  service: TaskService;
-  definition: ServiceFieldDef;
-  value: string;
-  onChange: (service: TaskService, key: string, value: string) => void;
-}
-
-function SubtaskField({ service, definition, value, onChange }: SubtaskFieldProps) {
-  const [revealed, setRevealed] = useState(false);
-  const isSecret = definition.type === "secret";
-  const id = `subtask-${service}-${definition.key}`;
-  const helpId = definition.help ? `${id}-help` : undefined;
-
-  const inputType = definition.type === "date"
-    ? "date"
-    : isSecret && !revealed
-      ? "password"
-      : "text";
-
-  return (
-    <div className={isSecret ? "sm:col-span-2" : undefined}>
-      <label htmlFor={id} className="field-label">
-        {definition.label}
-      </label>
-
-      <div className={isSecret ? "relative" : undefined}>
-        <input
-          id={id}
-          type={inputType}
-          value={value}
-          onChange={(event) => onChange(service, definition.key, event.target.value)}
-          placeholder={definition.placeholder}
-          maxLength={MAX_FIELD_LENGTH}
-          aria-describedby={helpId}
-          /*
-           * A customer's credential must not be offered to the operator's own
-           * password manager, nor filled from it — this box belongs to whoever
-           * is standing at the counter, not to whoever is signed in.
-           * `new-password` is what actually suppresses both in Chrome and
-           * Safari; `off` alone is widely ignored.
-           */
-          autoComplete={isSecret ? "new-password" : "off"}
-          spellCheck={isSecret ? false : undefined}
-          data-1p-ignore={isSecret ? "" : undefined}
-          className={`input-dark ${isSecret ? "!pr-11" : ""}`}
-        />
-
-        {isSecret && (
-          <button
-            type="button"
-            onClick={() => setRevealed((current) => !current)}
-            aria-pressed={revealed}
-            aria-label={revealed ? `Hide ${definition.label}` : `Show ${definition.label}`}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-ink-muted hover:text-ink transition-colors duration-fast"
-          >
-            {revealed ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-          </button>
-        )}
-      </div>
-
-      {definition.help && (
-        <span id={helpId} className="field-hint">
-          {definition.help}
-        </span>
-      )}
-    </div>
   );
 }

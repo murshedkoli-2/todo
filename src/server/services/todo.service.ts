@@ -3,9 +3,10 @@ import Todo from "@/models/Todo";
 import { toTodoDTO, type TodoDTO } from "@/lib/dto/todo";
 import { NotFoundError } from "@/lib/api/errors";
 import { derivePaymentStatus } from "@/lib/payment";
-import { normalizeSubtasks, toStoredSubtasks } from "@/lib/subtasks";
+import { normalizeSubtasks, readSubtasks, toStoredSubtasks } from "@/lib/subtasks";
+import { deriveStatusFromSubtasks } from "@/lib/taskStatus";
 import type {
-  CreateTodoInput, TodoListQuery, UpdateTodoInput,
+  CreateTodoInput, SubtaskPatchInput, TaskService, TodoListQuery, UpdateTodoInput,
 } from "@/lib/schemas/todo";
 
 export interface TodoPage {
@@ -76,7 +77,11 @@ export async function createTodo(
     userId: new Types.ObjectId(userId),
     title: input.title,
     description: input.description,
-    status: input.status,
+    /* A task created with every sub-task already ticked — the wizard allows it,
+       and it is how work finished before it was written down gets recorded — is
+       finished on arrival. The same rule applies here as on every later write,
+       so a task cannot be born in the inconsistent state updates forbid. */
+    status: deriveStatusFromSubtasks(subtasks, input.status) ?? input.status,
     priority: input.priority,
     dueDate: input.dueDate ?? undefined,
     services,
@@ -125,13 +130,14 @@ export async function updateTodo(
    * same payload — which is what the form always sends — rather than against
    * what is stored, so this never needs an extra read.
    */
+  let written: ReturnType<typeof normalizeSubtasks> | null = null;
   if (input.services !== undefined || input.subtasks !== undefined) {
-    const { services, subtasks } = normalizeSubtasks(
+    written = normalizeSubtasks(
       input.services ?? input.subtasks?.map((subtask) => subtask.service) ?? [],
       input.subtasks
     );
-    set.services = services;
-    set.subtasks = toStoredSubtasks(subtasks);
+    set.services = written.services;
+    set.subtasks = toStoredSubtasks(written.subtasks);
   }
 
   if ("description" in input) assign("description", input.description);
@@ -155,16 +161,36 @@ export async function updateTodo(
    * Only the payment-touching patches pay for the extra read; the far more
    * common `{ status }` from a board drag does not.
    */
-  if ("paymentAmount" in input || "paidAmount" in input) {
+  /*
+   * The checklist drives the status — see `lib/taskStatus.ts`. It needs the
+   * status as stored, because the interesting cases are the transitions *out*
+   * of what is already there: reopening a completed task, or moving an
+   * untouched one along. An explicit `status` in the same payload wins, since
+   * that is the operator saying so directly.
+   */
+  const derivesStatus = written !== null && input.status === undefined;
+  const needsStored =
+    derivesStatus || "paymentAmount" in input || "paidAmount" in input;
+
+  /* One read serves both derivations. The common patches — a board drag's
+     `{ status }`, a rename — still take none. */
+  if (needsStored) {
     const current = await Todo.findOne({ _id: todoId, userId }).lean();
     if (!current) throw new NotFoundError("Task not found");
     const stored = toTodoDTO(current);
 
-    const total =
-      "paymentAmount" in input ? input.paymentAmount ?? null : stored.paymentAmountMinor;
-    const paid = "paidAmount" in input ? input.paidAmount ?? null : stored.paidAmountMinor;
+    if ("paymentAmount" in input || "paidAmount" in input) {
+      const total =
+        "paymentAmount" in input ? input.paymentAmount ?? null : stored.paymentAmountMinor;
+      const paid = "paidAmount" in input ? input.paidAmount ?? null : stored.paidAmountMinor;
 
-    set.paymentStatus = derivePaymentStatus(total, paid);
+      set.paymentStatus = derivePaymentStatus(total, paid);
+    }
+
+    if (derivesStatus) {
+      const derived = deriveStatusFromSubtasks(written!.subtasks, stored.status);
+      if (derived) set.status = derived;
+    }
   }
 
   const update: Record<string, unknown> = {};
@@ -175,6 +201,72 @@ export async function updateTodo(
     returnDocument: "after",
     runValidators: true,
   }).lean();
+
+  if (!document) throw new NotFoundError("Task not found");
+  return toTodoDTO(document);
+}
+
+/**
+ * Changes one sub-task, leaving every other one exactly as stored.
+ *
+ * This is the write behind a checklist tick and behind editing what was
+ * captured for a single job, and it exists because the whole-task PATCH is the
+ * wrong tool for both. That one replaces `subtasks` outright, so a caller has
+ * to send the complete array back — which means it must have loaded the
+ * complete array first, credentials included, or it silently saves a redacted
+ * copy over the real values. A list page has no business holding a customer's
+ * password just to tick "collected" off, and now it does not have to.
+ *
+ * The merge happens here rather than in the client for the same reason: the
+ * stored row is the only thing that knows what was there before.
+ */
+export async function updateSubtask(
+  userId: string,
+  todoId: string,
+  service: TaskService,
+  patch: SubtaskPatchInput
+): Promise<TodoDTO> {
+  const current = await Todo.findOne({ _id: todoId, userId }).lean();
+  if (!current) throw new NotFoundError("Task not found");
+
+  /* Read through the same reconciliation every other path uses, so a task
+     stored before `subtasks` existed still has a row to patch. */
+  const { services, subtasks } = readSubtasks(current.services, current.subtasks);
+
+  const target = subtasks.find((subtask) => subtask.service === service);
+  // The service is a valid catalogue value — the schema saw to that — but this
+  // task does not cover it. Ticking a job the task does not have is a 404 on
+  // the sub-task, not a silent no-op that reports success.
+  if (!target) throw new NotFoundError("This task does not cover that service");
+
+  const merged = subtasks.map((subtask) =>
+    subtask.service === service
+      ? {
+          ...subtask,
+          done: patch.done ?? subtask.done,
+          /* A partial: keys the caller left out keep their stored value, and a
+             key sent blank is dropped by `normalizeSubtasks` below, which is
+             how a value gets cleared. */
+          fields: patch.fields ? { ...subtask.fields, ...patch.fields } : subtask.fields,
+        }
+      : subtask
+  );
+
+  const reconciled = normalizeSubtasks(services, merged);
+  const stored = toTodoDTO(current);
+  const derived = deriveStatusFromSubtasks(reconciled.subtasks, stored.status);
+
+  const set: Record<string, unknown> = {
+    services: reconciled.services,
+    subtasks: toStoredSubtasks(reconciled.subtasks),
+  };
+  if (derived) set.status = derived;
+
+  const document = await Todo.findOneAndUpdate(
+    { _id: todoId, userId },
+    { $set: set },
+    { returnDocument: "after", runValidators: true }
+  ).lean();
 
   if (!document) throw new NotFoundError("Task not found");
   return toTodoDTO(document);

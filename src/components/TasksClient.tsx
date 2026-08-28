@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Todo, getDisplayStatus, STATUS_LABELS, DisplayStatus, PRIORITY_RANK,
+  Todo, TaskService, getDisplayStatus, STATUS_LABELS, DisplayStatus, PRIORITY_RANK,
   formatServices, describeSubtaskFields,
 } from "@/lib/types";
+import { redactSecrets } from "@/lib/subtasks";
 import { tallyByStatus } from "@/lib/taskInsights";
 import type { TodoPriority, TodoStatus } from "@/lib/schemas/todo";
 import { api, errorMessage } from "@/lib/apiClient";
@@ -241,6 +242,37 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
     [changeStatus]
   );
 
+  /**
+   * Ticks one leg of a task off from the list.
+   *
+   * Not optimistic, unlike a status change: the tick can complete the task
+   * outright — the checklist drives the status, see `lib/taskStatus.ts` — and
+   * guessing at that here would mean reimplementing the derivation in the
+   * client and having the row flicker whenever the two disagreed. The response
+   * carries the settled task.
+   *
+   * That response comes from the single-task endpoint, so it still holds any
+   * credential the task captured. This page is a list and holds fifty tasks;
+   * running the reply back through the same redaction the list endpoint applies
+   * keeps the invariant that a password never lives in list state, whatever the
+   * user does here.
+   */
+  const toggleSubtask = useCallback(
+    async (id: string, service: TaskService, done: boolean) => {
+      try {
+        const updated = await api<Todo>(`/api/todos/${id}/subtasks/${service}`, {
+          method: "PATCH",
+          body: { done },
+        });
+        const safe: Todo = { ...updated, subtasks: redactSecrets(updated.subtasks) };
+        setTodos((current) => current.map((todo) => (todo._id === id ? safe : todo)));
+      } catch (error) {
+        toast.error(errorMessage(error));
+      }
+    },
+    [toast, setTodos]
+  );
+
   const handleQuickAdd = useCallback(
     async (input: { title: string; priority: TodoPriority; dueDate: Date | null }) => {
       const created = await api<Todo>("/api/todos", {
@@ -446,6 +478,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           todos={visibleTodos}
           onView={openTask}
           onStatusChange={handleStatusChange}
+          onSubtaskToggle={toggleSubtask}
           pendingIds={pendingIds}
         />
       ) : (
@@ -461,6 +494,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
                 onView={openTask}
                 onEdit={(item) => router.push(`/tasks/${item._id}/edit`)}
                 onStatusChange={handleStatusChange}
+                onSubtaskToggle={toggleSubtask}
                 pending={pendingIds.has(todo._id)}
               />
             </div>
