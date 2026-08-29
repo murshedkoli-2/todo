@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  Todo, TodoStatus, TodoPriority, PaymentMethod, TaskService, TaskSubtask,
+  Todo, TodoStatus, TodoPriority, PaymentMethod, SubtaskStatus, TaskService, TaskSubtask,
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
   PRIORITY_CHOICES, PRIORITY_LABELS, PRIORITY_COLORS,
   PAYMENT_METHOD_CHOICES, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_COLORS,
@@ -184,7 +184,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
     setSubtasks((current) => {
       const next = current.some((subtask) => subtask.service === service)
         ? current.filter((subtask) => subtask.service !== service)
-        : [...current, { service, done: false, fields: {} }];
+        : [...current, { service, status: "todo" as const, fields: {} }];
       return normalizeSubtasks(next.map((subtask) => subtask.service), next).subtasks;
     });
   };
@@ -199,10 +199,10 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
     );
   };
 
-  const toggleSubtaskDone = (service: TaskService) => {
+  const setSubtaskStatus = (service: TaskService, status: SubtaskStatus) => {
     setSubtasks((current) =>
       current.map((subtask) =>
-        subtask.service === service ? { ...subtask, done: !subtask.done } : subtask
+        subtask.service === service ? { ...subtask, status } : subtask
       )
     );
   };
@@ -419,7 +419,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                     subtasks={subtasks}
                     onToggleService={toggleService}
                     onFieldChange={setSubtaskField}
-                    onToggleDone={toggleSubtaskDone}
+                    onStatusChange={setSubtaskStatus}
                   />
                 )}
 

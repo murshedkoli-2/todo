@@ -58,16 +58,32 @@ describe("toTodoDTO", () => {
       subtasks: [
         {
           service: "birth_certificate_correction",
-          done: true,
+          status: "completed",
           fields: [{ key: "birth_number", value: "19998812345678901" }],
         },
       ],
     });
     expect(dto.subtasks[0]).toEqual({
       service: "birth_certificate_correction",
-      done: true,
+      status: "completed",
       fields: { birth_number: "19998812345678901" },
     });
+  });
+
+  test("reads a row stored before sub-tasks had three states", () => {
+    /* There is no migration: the boolean is mapped on every read. A document
+       written last week says `done: true` and nothing else, and it has to keep
+       reading as finished work — otherwise the deploy silently reopens every
+       job the desk has ever closed. */
+    const dto = toTodoDTO({
+      ...base,
+      services: ["new_passport", "police_clearance"],
+      subtasks: [
+        { service: "new_passport", done: true, fields: [] },
+        { service: "police_clearance", done: false, fields: [] },
+      ],
+    });
+    expect(dto.subtasks.map((s) => s.status)).toEqual(["completed", "todo"]);
   });
 
   test("keeps a credential on the single-task read, where it is needed", () => {
@@ -75,7 +91,7 @@ describe("toTodoDTO", () => {
       ...base,
       services: ["nid_correction"],
       subtasks: [
-        { service: "nid_correction", done: false, fields: [{ key: "password", value: "s3cret" }] },
+        { service: "nid_correction", status: "todo", fields: [{ key: "password", value: "s3cret" }] },
       ],
     });
     expect(dto.subtasks[0].fields.password).toBe("s3cret");
@@ -91,7 +107,7 @@ describe("toTodoDTO", () => {
         subtasks: [
           {
             service: "nid_correction",
-            done: false,
+            status: "in_progress",
             fields: [
               { key: "nid_number", value: "123" },
               { key: "password", value: "s3cret" },
@@ -112,8 +128,8 @@ describe("toTodoDTO", () => {
       ...base,
       services: ["new_nid"],
       subtasks: [
-        { service: "nid_correction", done: false, fields: [{ key: "password", value: "s3cret" }] },
-        { service: "new_nid", done: false, fields: [] },
+        { service: "nid_correction", status: "todo", fields: [{ key: "password", value: "s3cret" }] },
+        { service: "new_nid", status: "todo", fields: [] },
       ],
     });
     expect(dto.subtasks.map((s) => s.service)).toEqual(["new_nid"]);

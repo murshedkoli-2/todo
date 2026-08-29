@@ -19,12 +19,31 @@ import {
   fieldDef, isTaskService,
 } from "@/lib/serviceCatalogue";
 import type { TaskService } from "@/lib/serviceCatalogue";
+import { TODO_STATUSES } from "@/lib/schemas/todo";
+import type { TodoStatus } from "@/lib/schemas/todo";
+
+/**
+ * How far along one leg of the errand is.
+ *
+ * Deliberately the same three values as the task's own status rather than a
+ * vocabulary of its own. A sub-task *is* a task on this desk — "at the passport
+ * office" is the thing an operator wants to record, and it is the same thing
+ * whether it is said about the whole errand or about one leg of it. Sharing the
+ * enum also means one set of labels, one set of colours, and a checklist whose
+ * rows read in the same language as the badge at the top of the page.
+ */
+export type SubtaskStatus = TodoStatus;
 
 /** One ticked service and everything recorded against it. */
 export interface TaskSubtask {
   service: TaskService;
-  /** Ticked off by the operator once that leg of the errand is finished. */
-  done: boolean;
+  /**
+   * Where this leg has got to. Replaced the boolean `done` this field used to
+   * be: a checklist that can only say "finished" or "not started" cannot say
+   * the thing operators actually needed to write down, which is that a job has
+   * been lodged and is now waiting on somebody else.
+   */
+  status: SubtaskStatus;
   /**
    * Captured values, keyed by `ServiceFieldDef.key`. Only keys in the
    * catalogue survive normalization, and a blank value is dropped rather than
@@ -51,6 +70,39 @@ export interface StoredField {
   value: string;
 }
 
+/** True for one of the three statuses, narrowing an untrusted string. */
+export function isSubtaskStatus(value: unknown): value is SubtaskStatus {
+  return typeof value === "string" && (TODO_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * The status of a row that may predate the field.
+ *
+ * Every sub-task written before this change carries `done` and no `status`, and
+ * there is no migration: the boolean maps cleanly onto two of the three values,
+ * and running the mapping on every read costs nothing and cannot leave a
+ * half-converted collection behind. An unrecognised status falls back the same
+ * way, so a value retired from the enum later degrades to "todo" rather than
+ * rendering as a row with no state at all.
+ */
+export function resolveSubtaskStatus(
+  status: unknown,
+  done: unknown
+): SubtaskStatus {
+  if (isSubtaskStatus(status)) return status;
+  return done === true ? "completed" : "todo";
+}
+
+/** Whether this leg is finished. The only meaning "done" has now. */
+export function isSubtaskDone(subtask: { status: SubtaskStatus }): boolean {
+  return subtask.status === "completed";
+}
+
+/** Whether work has started on this leg — ticked off, or under way. */
+export function isSubtaskStarted(subtask: { status: SubtaskStatus }): boolean {
+  return subtask.status !== "todo";
+}
+
 /** Either shape the field values may arrive in — a client map, or stored pairs. */
 export type FieldSource =
   | Record<string, unknown>
@@ -61,6 +113,8 @@ export type FieldSource =
 /** What a caller may submit. Every part is optional and separately distrusted. */
 export interface SubtaskInput {
   service: string;
+  status?: string | null;
+  /** @deprecated The pre-`status` spelling. Still read, never written. */
   done?: boolean | null;
   fields?: FieldSource;
 }
@@ -134,7 +188,7 @@ export function normalizeSubtasks(
       const row = submitted.get(service);
       return {
         service,
-        done: row?.done === true,
+        status: resolveSubtaskStatus(row?.status, row?.done),
         fields: normalizeFields(service, row?.fields),
       };
     }),
@@ -165,10 +219,10 @@ export function readSubtasks(
  */
 export function toStoredSubtasks(
   subtasks: readonly TaskSubtask[]
-): Array<{ service: TaskService; done: boolean; fields: StoredField[] }> {
+): Array<{ service: TaskService; status: SubtaskStatus; fields: StoredField[] }> {
   return subtasks.map((subtask) => ({
     service: subtask.service,
-    done: subtask.done,
+    status: subtask.status,
     fields: SERVICE_FIELDS[subtask.service]
       .filter((definition) => subtask.fields[definition.key] !== undefined)
       .map((definition) => ({
@@ -178,14 +232,32 @@ export function toStoredSubtasks(
   }));
 }
 
-/** How far through the checklist a task is. `total` is the number of sub-tasks. */
-export function subtaskProgress(
-  subtasks: readonly TaskSubtask[]
-): { done: number; total: number } {
-  return {
-    done: subtasks.reduce((count, subtask) => count + (subtask.done ? 1 : 0), 0),
-    total: subtasks.length,
-  };
+/** A tally of the checklist by state. `total` is the number of sub-tasks. */
+export interface SubtaskProgress {
+  /** Not started. */
+  todo: number;
+  /** Under way — lodged, submitted, waiting on somebody else. */
+  inProgress: number;
+  /** Finished. */
+  done: number;
+  /** Anything past "not started" — the count that decides whether a task has
+      stopped being untouched. */
+  started: number;
+  total: number;
+}
+
+/** How far through the checklist a task is. */
+export function subtaskProgress(subtasks: readonly TaskSubtask[]): SubtaskProgress {
+  const tally = { todo: 0, inProgress: 0, done: 0, started: 0, total: subtasks.length };
+
+  for (const subtask of subtasks) {
+    if (subtask.status === "completed") tally.done += 1;
+    else if (subtask.status === "in_progress") tally.inProgress += 1;
+    else tally.todo += 1;
+  }
+  tally.started = tally.inProgress + tally.done;
+
+  return tally;
 }
 
 /** How many of a sub-task's catalogue fields are still blank. */

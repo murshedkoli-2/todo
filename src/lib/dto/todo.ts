@@ -21,7 +21,7 @@ export interface TodoDTO {
   services: TaskService[];
   /**
    * One entry per element of `services`, same order, holding what was captured
-   * for that job and whether it has been ticked off.
+   * for that job and how far along that leg is.
    *
    * Rebuilt from storage on every read rather than trusted, so a task saved
    * before this field existed still arrives with a row per service instead of
@@ -60,7 +60,13 @@ export interface TodoSource {
   priority?: string | null;
   dueDate?: Date | null;
   services?: string[] | null;
-  subtasks?: Array<{ service: string; done?: boolean | null; fields?: readonly StoredField[] | null }> | null;
+  subtasks?: Array<{
+    service: string;
+    status?: string | null;
+    /** @deprecated Pre-`status` rows. Folded in by `resolveSubtaskStatus`. */
+    done?: boolean | null;
+    fields?: readonly StoredField[] | null;
+  }> | null;
   images?: string[] | null;
   featureImage?: string | null;
   paymentAmountMinor?: number | null;

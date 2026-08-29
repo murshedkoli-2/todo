@@ -1,12 +1,13 @@
 "use client";
 
 import {
-  TaskService, TaskSubtask,
+  SubtaskStatus, TaskService, TaskSubtask,
   SERVICE_FIELDS, SERVICE_LABELS, SERVICE_DESCRIPTIONS,
   SERVICE_COLORS, SERVICE_TEXT_COLORS, SERVICE_ON_COLORS,
   TASK_SERVICES, missingFieldCount,
 } from "@/lib/types";
 import SubtaskFieldInput from "@/components/task/SubtaskFieldInput";
+import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
 import { CheckIcon } from "@/components/ui/icons";
 
 interface SubtaskEditorProps {
@@ -14,7 +15,7 @@ interface SubtaskEditorProps {
   subtasks: TaskSubtask[];
   onToggleService: (service: TaskService) => void;
   onFieldChange: (service: TaskService, key: string, value: string) => void;
-  onToggleDone: (service: TaskService) => void;
+  onStatusChange: (service: TaskService, status: SubtaskStatus) => void;
 }
 
 /**
@@ -33,7 +34,7 @@ interface SubtaskEditorProps {
  * cursor.
  */
 export default function SubtaskEditor({
-  subtasks, onToggleService, onFieldChange, onToggleDone,
+  subtasks, onToggleService, onFieldChange, onStatusChange,
 }: SubtaskEditorProps) {
   const selected = new Set(subtasks.map((subtask) => subtask.service));
 
@@ -126,7 +127,7 @@ export default function SubtaskEditor({
               subtask={subtask}
               index={index}
               onFieldChange={onFieldChange}
-              onToggleDone={onToggleDone}
+              onStatusChange={onStatusChange}
             />
           ))}
         </div>
@@ -139,10 +140,10 @@ interface SubtaskCardProps {
   subtask: TaskSubtask;
   index: number;
   onFieldChange: (service: TaskService, key: string, value: string) => void;
-  onToggleDone: (service: TaskService) => void;
+  onStatusChange: (service: TaskService, status: SubtaskStatus) => void;
 }
 
-function SubtaskCard({ subtask, index, onFieldChange, onToggleDone }: SubtaskCardProps) {
+function SubtaskCard({ subtask, index, onFieldChange, onStatusChange }: SubtaskCardProps) {
   const { service } = subtask;
   const color = SERVICE_COLORS[service];
   const definitions = SERVICE_FIELDS[service];
@@ -172,17 +173,15 @@ function SubtaskCard({ subtask, index, onFieldChange, onToggleDone }: SubtaskCar
           </p>
         </div>
 
-        {/* Ticked off when that leg of the errand is finished, which is what
-            makes the list a checklist rather than a summary. */}
-        <label className="flex items-center gap-2 flex-shrink-0 cursor-pointer text-[12px] font-semibold text-ink-muted select-none">
-          <input
-            type="checkbox"
-            checked={subtask.done}
-            onChange={() => onToggleDone(service)}
-            className="w-4 h-4 accent-[var(--accent)] cursor-pointer"
-          />
-          Done
-        </label>
+        {/* Where this leg stands, settable while the task is still being
+            written down: a fair number of these are recorded after the fact —
+            two jobs already lodged, one still to start — and a form that could
+            only say "done" or "not done" forced that in as a wrong answer. */}
+        <SubtaskStatusControl
+          value={subtask.status}
+          onChange={(next) => onStatusChange(service, next)}
+          name={SERVICE_LABELS[service]}
+        />
       </div>
 
       {definitions.length > 0 && (

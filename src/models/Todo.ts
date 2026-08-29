@@ -19,7 +19,19 @@ export type { PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatu
  */
 export interface ITodoSubtask {
   service: TaskService;
-  done: boolean;
+  /** Where this leg has got to — the same three values the task itself uses. */
+  status: TodoStatus;
+  /**
+   * @deprecated The boolean `status` replaced.
+   *
+   * Kept on the schema, and only on the schema: rows written before the change
+   * still carry it, and dropping it from the model would blank the field on the
+   * hydrated read path — a task would silently reopen the first time an image
+   * was added to it. Every write replaces the whole array without it, so a row
+   * loses the key the next time it is saved. Read through
+   * `resolveSubtaskStatus`, never directly.
+   */
+  done?: boolean;
   fields: Array<{ key: string; value: string }>;
 }
 
@@ -79,7 +91,16 @@ const SubtaskSchema = new Schema<ITodoSubtask>(
         message: "{VALUE} is not a service this desk offers",
       },
     },
-    done: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: {
+        values: TODO_STATUSES,
+        message: "Sub-task status must be one of: todo, in_progress, completed",
+      },
+      default: "todo",
+    },
+    // Legacy. See `ITodoSubtask.done` — read on the way out, never written.
+    done: { type: Boolean, default: undefined },
     fields: { type: [SubtaskFieldSchema], default: [] },
   },
   { _id: false }

@@ -44,8 +44,10 @@ async function fillTaskWizard(
     services?: string[];
     /** Sub-task answers, keyed by the visible field label. */
     subtaskFields?: Record<string, string>;
-    /** Services to tick off as finished on the sub-task cards. */
+    /** Services to mark finished on the sub-task cards. */
     done?: string[];
+    /** Services to mark as under way — lodged, waiting on somebody else. */
+    inProgress?: string[];
     total?: string;
     paid?: string;
     method?: string;
@@ -65,11 +67,20 @@ async function fillTaskWizard(
   for (const [label, value] of Object.entries(fields.subtaskFields ?? {})) {
     await page.getByLabel(label, { exact: true }).fill(value);
   }
+  /* Picked by the state's own name on the segmented control, not by position:
+     a sub-task now has three states, and "the third button" is exactly the kind
+     of assertion that keeps passing after the meaning has moved. */
   for (const service of fields.done ?? []) {
     await page
       .locator(`[data-subtask="${service}"]`)
-      .getByRole("checkbox", { name: "Done" })
-      .check();
+      .getByRole("radio", { name: "Completed" })
+      .click();
+  }
+  for (const service of fields.inProgress ?? []) {
+    await page
+      .locator(`[data-subtask="${service}"]`)
+      .getByRole("radio", { name: "In Progress" })
+      .click();
   }
 
   await continueThrough(page, "schedule", "payment");
@@ -183,6 +194,10 @@ test("captures per-service information as sub-tasks, and hides the credential", 
       "NID portal password": "counter-secret",
     },
     done: ["birth_certificate_correction"],
+    /* The state that did not exist before: the NID correction has been lodged
+       at the counter and is waiting on the office, which is neither of the two
+       things a checkbox could say. */
+    inProgress: ["nid_correction"],
   });
 
   await continueThrough(page, "attachments", "review");
@@ -212,14 +227,22 @@ test("captures per-service information as sub-tasks, and hides the credential", 
   await page.getByRole("button", { name: "Show NID portal password" }).click();
   await expect(page.getByText("counter-secret")).toBeVisible();
 
-  // Ticking the remaining leg persists on its own, without opening the editor.
+  // The middle state survives the round trip through the database.
   const nidRow = page.locator('[data-subtask="nid_correction"]');
-  await nidRow.getByRole("checkbox").click();
+  await expect(nidRow).toHaveAttribute("data-status", "in_progress");
+  await expect(page.getByText("1 under way")).toBeVisible();
+
+  // Finishing the remaining leg persists on its own, without opening the editor.
+  await nidRow.getByRole("radio", { name: "Completed" }).click();
   await expect(page.getByText("2 of 2 done")).toBeVisible();
 
   await page.reload();
   await expect(page.getByText("2 of 2 done")).toBeVisible();
-  await expect(nidRow).toHaveAttribute("data-done", "true");
+  await expect(nidRow).toHaveAttribute("data-status", "completed");
+
+  /* The task closed itself on that last press — the checklist drives the
+     status, and the third state does not change that rule. */
+  await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
 
   // Clean up so reruns do not accumulate tasks holding a password.
   await page.getByRole("link", { name: "Edit task" }).click();

@@ -109,6 +109,11 @@ export const CheckIcon = (p: IconProps) => (
   <Icon strokeWidth={2.4} {...p}><path d="M5 13l4 4L19 7" /></Icon>
 );
 
+/** An empty ring — "nothing has happened here yet", beside a tick and a clock. */
+export const CircleIcon = (p: IconProps) => (
+  <Icon {...p}><circle cx="12" cy="12" r="8" /></Icon>
+);
+
 export const MoreIcon = (p: IconProps) => (
   <Icon strokeWidth={2.4} {...p}>
     <circle cx="12" cy="5" r="0.6" /><circle cx="12" cy="12" r="0.6" /><circle cx="12" cy="19" r="0.6" />

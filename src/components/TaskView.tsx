@@ -9,7 +9,7 @@ import {
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
-  TaskService,
+  SubtaskStatus, TaskService,
 } from "@/lib/types";
 import { isPastDue as dueDayHasPassed } from "@/lib/dueDate";
 import { subtaskStatusHint } from "@/lib/taskStatus";
@@ -95,7 +95,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
   };
 
   /*
-   * Ticking one leg of the errand off.
+   * Moving one leg of the errand along.
    *
    * Addressed by service in the URL rather than by sending the whole `subtasks`
    * array back. The array form only ever worked because this page is served by
@@ -108,23 +108,20 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
    * occasionally has to undo. The response carries the whole task because the
    * tick can complete it: see `lib/taskStatus.ts`.
    */
-  const handleSubtaskToggle = async (service: TaskService) => {
+  const handleSubtaskStatus = async (service: TaskService, status: SubtaskStatus) => {
     const previous = todo;
-    const target = todo.subtasks.find((subtask) => subtask.service === service);
-    if (!target) return;
-    const done = !target.done;
 
     setTodo((current) => ({
       ...current,
       subtasks: current.subtasks.map((subtask) =>
-        subtask.service === service ? { ...subtask, done } : subtask
+        subtask.service === service ? { ...subtask, status } : subtask
       ),
     }));
 
     try {
       const updated = await api<Todo>(
         `/api/todos/${todo._id}/subtasks/${service}`,
-        { method: "PATCH", body: { done } }
+        { method: "PATCH", body: { status } }
       );
       setTodo(updated);
       router.refresh();
@@ -248,7 +245,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
           {todo.subtasks.length > 0 && (
             <SubtaskChecklist
               subtasks={todo.subtasks}
-              onToggleDone={handleSubtaskToggle}
+              onStatusChange={handleSubtaskStatus}
               onSaveFields={handleSubtaskFields}
               busy={deleting}
             />

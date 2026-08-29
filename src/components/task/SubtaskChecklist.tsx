@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import {
-  TaskService, TaskSubtask,
+  SubtaskStatus, TaskService, TaskSubtask,
   SERVICE_FIELDS, SERVICE_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS,
-  SERVICE_ON_COLORS,
-  describeSubtaskFields, missingFieldCount, subtaskProgress,
+  describeSubtaskFields, isSubtaskDone, missingFieldCount, subtaskProgress,
 } from "@/lib/types";
 import { subtaskStatusHint } from "@/lib/taskStatus";
 import ProgressBar from "@/components/ui/ProgressBar";
 import SubtaskFieldInput from "@/components/task/SubtaskFieldInput";
+import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
 import {
   CheckIcon, EditIcon, EyeIcon, EyeOffIcon, SpinnerIcon,
 } from "@/components/ui/icons";
@@ -19,8 +19,8 @@ export type SubtaskFields = Record<string, string>;
 
 interface SubtaskChecklistProps {
   subtasks: TaskSubtask[];
-  /** Persists the tick. Rejecting the promise rolls the row back. */
-  onToggleDone: (service: TaskService) => Promise<void>;
+  /** Persists a status change. Rejecting the promise rolls the row back. */
+  onStatusChange: (service: TaskService, status: SubtaskStatus) => Promise<void>;
   /**
    * Persists edited values for one sub-task. Receives every field the service
    * defines, blanks included — a blank is how a value gets cleared.
@@ -35,10 +35,14 @@ interface SubtaskChecklistProps {
  *
  * The task's own status says whether the *whole* errand is finished, which is
  * too coarse for a customer who brought three jobs: two collected, one still at
- * the passport office reads as "in progress" either way. Ticking the legs off
+ * the passport office reads as "in progress" either way. Moving the legs along
  * individually is the only thing on this page that says which one is waiting —
- * and, since the checklist now drives the status, it is also the only thing the
+ * and, since the checklist drives the status, it is also the only thing the
  * operator has to do to close the task out.
+ *
+ * Each leg carries the same three states the task itself does, so "lodged,
+ * waiting on the office" is something a row can say rather than something the
+ * operator has to hold in their head or bury in the description.
  *
  * Each row edits in place. Sending someone to the full edit wizard to correct
  * one digit of a passport number meant re-walking a five-step form for a
@@ -47,7 +51,7 @@ interface SubtaskChecklistProps {
  * per-field and resets on navigation.
  */
 export default function SubtaskChecklist({
-  subtasks, onToggleDone, onSaveFields, busy = false,
+  subtasks, onStatusChange, onSaveFields, busy = false,
 }: SubtaskChecklistProps) {
   const progress = subtaskProgress(subtasks);
   /* Only one row is open at a time. Two half-finished edits on one screen is
@@ -60,6 +64,7 @@ export default function SubtaskChecklist({
         <h2 className="text-eyebrow">Sub-tasks ({progress.total})</h2>
         <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
           {progress.done} of {progress.total} done
+          {progress.inProgress > 0 && ` · ${progress.inProgress} under way`}
         </span>
       </div>
 
@@ -81,7 +86,7 @@ export default function SubtaskChecklist({
           <SubtaskRow
             key={subtask.service}
             subtask={subtask}
-            onToggleDone={onToggleDone}
+            onStatusChange={onStatusChange}
             onSaveFields={onSaveFields}
             editing={editing === subtask.service}
             onEdit={() => setEditing(subtask.service)}
@@ -96,7 +101,7 @@ export default function SubtaskChecklist({
 
 interface SubtaskRowProps {
   subtask: TaskSubtask;
-  onToggleDone: (service: TaskService) => Promise<void>;
+  onStatusChange: (service: TaskService, status: SubtaskStatus) => Promise<void>;
   onSaveFields: (service: TaskService, fields: SubtaskFields) => Promise<void>;
   editing: boolean;
   onEdit: () => void;
@@ -105,12 +110,13 @@ interface SubtaskRowProps {
 }
 
 function SubtaskRow({
-  subtask, onToggleDone, onSaveFields, editing, onEdit, onCloseEdit, busy,
+  subtask, onStatusChange, onSaveFields, editing, onEdit, onCloseEdit, busy,
 }: SubtaskRowProps) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const { service, done } = subtask;
+  const { service, status } = subtask;
+  const done = isSubtaskDone(subtask);
   const color = SERVICE_COLORS[service];
   const definitions = SERVICE_FIELDS[service];
   /* Described masked, then the one revealed field is swapped back from the
@@ -119,10 +125,10 @@ function SubtaskRow({
   const described = describeSubtaskFields(subtask);
   const missing = missingFieldCount(subtask);
 
-  const toggle = async () => {
+  const setStatus = async (next: SubtaskStatus) => {
     setSaving(true);
     try {
-      await onToggleDone(service);
+      await onStatusChange(service, next);
     } finally {
       setSaving(false);
     }
@@ -140,34 +146,14 @@ function SubtaskRow({
 
   return (
     <li
-      className="well p-3.5 flex items-start gap-3"
+      className="well p-3.5"
       data-subtask={service}
+      data-status={status}
       data-done={done}
       style={{ borderLeft: `3px solid ${color}` }}
     >
-      {/* The whole tick is one button rather than a checkbox plus a label, so
-          the hit area on a phone is the control and not a 16px square. */}
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={done}
-        aria-label={`Mark ${SERVICE_LABELS[service]} as ${done ? "not done" : "done"}`}
-        onClick={toggle}
-        disabled={busy || saving}
-        className="w-5 h-5 mt-0.5 rounded-md flex-shrink-0 flex items-center justify-center transition-colors duration-fast disabled:opacity-50"
-        style={{
-          background: done ? color : "transparent",
-          border: `1.5px solid ${done ? color : "var(--border-hover)"}`,
-          color: SERVICE_ON_COLORS[service],
-        }}
-      >
-        {saving
-          ? <SpinnerIcon className="w-3 h-3" />
-          : done && <CheckIcon className="w-3 h-3" />}
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="min-w-0 flex flex-wrap items-baseline gap-x-2">
             <span
               className="text-[13px] font-bold leading-tight"
@@ -188,23 +174,37 @@ function SubtaskRow({
             )}
           </div>
 
-          {/*
-            Named for the row it opens, not "Edit" alone: three of these stacked
-            with the same accessible name is three identical announcements, and
-            the service is the only thing telling them apart.
-          */}
-          {!editing && (
-            <button
-              type="button"
-              onClick={onEdit}
-              disabled={busy || saving}
-              className="btn-ghost h-7 px-2 text-[11px] flex-shrink-0 disabled:opacity-50"
-              aria-label={`Edit ${SERVICE_LABELS[service]} details`}
-            >
-              <EditIcon className="w-3.5 h-3.5" />
-              Edit
-            </button>
-          )}
+          {/* The three states sit on the row itself rather than behind the edit
+              form: moving a leg along is the action taken on this page all day,
+              and correcting a captured value is the rare one. */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <SubtaskStatusControl
+              value={status}
+              onChange={(next) => void setStatus(next)}
+              name={SERVICE_LABELS[service]}
+              busy={saving}
+              disabled={busy}
+            />
+
+            {/*
+              Named for the row it opens, not "Edit" alone: three of these
+              stacked with the same accessible name is three identical
+              announcements, and the service is the only thing telling them
+              apart.
+            */}
+            {!editing && (
+              <button
+                type="button"
+                onClick={onEdit}
+                disabled={busy || saving}
+                className="btn-ghost h-7 px-2 text-[11px] disabled:opacity-50"
+                aria-label={`Edit ${SERVICE_LABELS[service]} details`}
+              >
+                <EditIcon className="w-3.5 h-3.5" />
+                Edit
+              </button>
+            )}
+          </div>
         </div>
 
         {editing ? (

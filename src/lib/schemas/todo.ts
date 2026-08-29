@@ -94,10 +94,20 @@ const subtaskFieldMap = z
     `A sub-task holds at most ${MAX_FIELDS_PER_SUBTASK} fields`
   );
 
+/**
+ * A sub-task's own progress, drawn from the same three values as the task's.
+ *
+ * `done` is the boolean this replaced. It is still accepted — a client loaded
+ * before the deploy is still sending it, and rejecting those saves outright
+ * would lose whatever else the form was carrying — and `normalizeSubtasks`
+ * folds it into `status`, which is the only spelling that gets stored.
+ */
 export const subtaskSchema = z
   .object({
     service: taskServiceSchema,
-    done: z.boolean().default(false),
+    status: todoStatusSchema.default("todo"),
+    /** @deprecated Send `status`. Read only when `status` is absent. */
+    done: z.boolean().optional(),
     fields: subtaskFieldMap.default({}),
   })
   .strict();
@@ -210,6 +220,8 @@ export const updateTodoSchema = z
  */
 export const subtaskPatchSchema = z
   .object({
+    status: todoStatusSchema,
+    /** @deprecated Send `status`. Mapped to one when `status` is absent. */
     done: z.boolean(),
     fields: subtaskFieldMap,
   })

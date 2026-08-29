@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import {
-  Todo, TaskService, getDisplayStatus, STATUS_COLORS, STATUS_LABELS, STATUS_TEXT_COLORS,
-  SERVICE_LABELS, SERVICE_SHORT_LABELS, SERVICE_COLORS, SERVICE_TEXT_COLORS,
-  SERVICE_ON_COLORS, describeSubtaskFields, subtaskProgress,
+  Todo, SubtaskStatus, TaskService, getDisplayStatus, STATUS_COLORS, STATUS_LABELS,
+  STATUS_TEXT_COLORS, SERVICE_LABELS, SERVICE_SHORT_LABELS, SERVICE_COLORS,
+  SERVICE_TEXT_COLORS, describeSubtaskFields, isSubtaskDone, subtaskProgress,
 } from "@/lib/types";
 import { formatDueLabel } from "@/lib/dueDate";
 import type { TodoStatus } from "@/lib/schemas/todo";
 import Money from "@/components/ui/Money";
 import PriorityFlag from "@/components/ui/PriorityFlag";
+import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
 import {
   CalendarIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, SpinnerIcon,
 } from "@/components/ui/icons";
@@ -18,8 +19,10 @@ interface TaskListProps {
   todos: Todo[];
   onView: (todo: Todo) => void;
   onStatusChange: (id: string, status: TodoStatus) => void;
-  /** Ticks one leg of a task off from the list. */
-  onSubtaskToggle: (id: string, service: TaskService, done: boolean) => Promise<void>;
+  /** Moves one leg of a task along from the list. */
+  onSubtaskStatusChange: (
+    id: string, service: TaskService, status: SubtaskStatus
+  ) => Promise<void>;
   /** Ids with a status change in flight. */
   pendingIds: ReadonlySet<string>;
 }
@@ -37,7 +40,7 @@ interface TaskListProps {
  * taken on almost every row is "this is done", and it should cost one click.
  */
 export default function TaskList({
-  todos, onView, onStatusChange, onSubtaskToggle, pendingIds,
+  todos, onView, onStatusChange, onSubtaskStatusChange, pendingIds,
 }: TaskListProps) {
   /* Expansion is per-row and additive — working through a morning's passport
      collections means keeping several open, not one at a time. */
@@ -103,20 +106,28 @@ export default function TaskList({
                 */}
                 {(todo.subtasks.length > 0 || todo.description) && (
                   <span className="block text-xs truncate mt-0.5 text-ink-muted">
-                    {todo.subtasks.map(({ service, done }, index) => (
-                      <span key={service}>
-                        {index > 0 && <span className="text-ink-muted"> · </span>}
-                        <span
-                          className="font-semibold"
-                          style={{
-                            color: SERVICE_TEXT_COLORS[service],
-                            textDecoration: done ? "line-through" : undefined,
-                          }}
-                        >
-                          {SERVICE_SHORT_LABELS[service]}
+                    {todo.subtasks.map((subtask, index) => {
+                      const { service, status } = subtask;
+                      const done = isSubtaskDone(subtask);
+                      return (
+                        <span key={service}>
+                          {index > 0 && <span className="text-ink-muted"> · </span>}
+                          <span
+                            className="font-semibold"
+                            style={{
+                              color: SERVICE_TEXT_COLORS[service],
+                              textDecoration: done ? "line-through" : undefined,
+                              /* A leg under way is neither struck through nor
+                                 plain — italic is the only weightless way to
+                                 mark it on a line this dense. */
+                              fontStyle: status === "in_progress" ? "italic" : undefined,
+                            }}
+                          >
+                            {SERVICE_SHORT_LABELS[service]}
+                          </span>
                         </span>
-                      </span>
-                    ))}
+                      );
+                    })}
                     {todo.subtasks.length > 0 && (
                       <span className="font-semibold"> · {progress.done}/{progress.total}</span>
                     )}
@@ -187,7 +198,7 @@ export default function TaskList({
                 <SubtaskRows
                   id={`subtasks-${todo._id}`}
                   todo={todo}
-                  onToggle={onSubtaskToggle}
+                  onStatusChange={onSubtaskStatusChange}
                 />
               )}
             </li>
@@ -201,28 +212,30 @@ export default function TaskList({
 interface SubtaskRowsProps {
   id: string;
   todo: Todo;
-  onToggle: (id: string, service: TaskService, done: boolean) => Promise<void>;
+  onStatusChange: (
+    id: string, service: TaskService, status: SubtaskStatus
+  ) => Promise<void>;
 }
 
 /**
  * A task's checklist, opened underneath its row.
  *
- * Read-only apart from the tick. Editing a captured value belongs on the task
+ * Read-only apart from the status. Editing a captured value belongs on the task
  * page, where there is room for the field labels and the help text that say
  * what a number is — a passport number typed into an unlabelled box in a list
- * row is a number typed into the wrong box. What this surface is for is the
- * one action that closes work out.
+ * row is a number typed into the wrong box. What this surface is for is moving
+ * work along, which is what an operator does to a row here all day.
  *
  * Credential values never reach here: the list endpoint strips them, so
  * `describeSubtaskFields` has nothing to mask and nothing to leak.
  */
-function SubtaskRows({ id, todo, onToggle }: SubtaskRowsProps) {
+function SubtaskRows({ id, todo, onStatusChange }: SubtaskRowsProps) {
   const [saving, setSaving] = useState<TaskService | null>(null);
 
-  const toggle = async (service: TaskService, done: boolean) => {
+  const setStatus = async (service: TaskService, status: SubtaskStatus) => {
     setSaving(service);
     try {
-      await onToggle(todo._id, service, done);
+      await onStatusChange(todo._id, service, status);
     } finally {
       setSaving(null);
     }
@@ -231,38 +244,20 @@ function SubtaskRows({ id, todo, onToggle }: SubtaskRowsProps) {
   return (
     <ul id={id} className="flex flex-col gap-1.5 mt-2.5 ml-8 sm:ml-9 animate-fade-in">
       {todo.subtasks.map((subtask) => {
-        const { service, done } = subtask;
+        const { service, status } = subtask;
+        const done = isSubtaskDone(subtask);
         const color = SERVICE_COLORS[service];
         const described = describeSubtaskFields(subtask);
-        const busy = saving === service;
 
         return (
           <li
             key={service}
             className="well px-3 py-2 flex items-center gap-2.5"
             data-subtask={service}
+            data-status={status}
             data-done={done}
             style={{ borderLeft: `3px solid ${color}` }}
           >
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={done}
-              disabled={busy}
-              onClick={() => toggle(service, !done)}
-              aria-label={`Mark ${SERVICE_LABELS[service]} on ${todo.title} as ${done ? "not done" : "done"}`}
-              className="w-[18px] h-[18px] rounded-md flex-shrink-0 flex items-center justify-center transition-colors duration-fast disabled:opacity-50"
-              style={{
-                background: done ? color : "transparent",
-                border: `1.5px solid ${done ? color : "var(--border-hover)"}`,
-                color: SERVICE_ON_COLORS[service],
-              }}
-            >
-              {busy
-                ? <SpinnerIcon className="w-3 h-3" />
-                : done && <CheckIcon className="w-2.5 h-2.5" />}
-            </button>
-
             <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
               <span
                 className="text-xs font-bold"
@@ -281,6 +276,18 @@ function SubtaskRows({ id, todo, onToggle }: SubtaskRowsProps) {
                 </span>
               )}
             </span>
+
+            {/* The task title goes into the control's group label: a page of
+                sixty rows otherwise announces the same three options over and
+                over with nothing to say which errand they belong to. */}
+            <SubtaskStatusControl
+              value={status}
+              onChange={(next) => void setStatus(service, next)}
+              name={SERVICE_LABELS[service]}
+              context={todo.title}
+              busy={saving === service}
+              size="sm"
+            />
           </li>
         );
       })}

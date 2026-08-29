@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
-  allSubtasksDone, deriveStatusFromSubtasks, subtaskStatusHint,
+  allSubtasksDone, deriveStatusFromSubtasks, nextSubtaskStatus, subtaskStatusHint,
 } from "@/lib/taskStatus";
-import type { TaskSubtask } from "@/lib/subtasks";
+import type { SubtaskStatus, TaskSubtask } from "@/lib/subtasks";
 import type { TodoStatus } from "@/lib/schemas/todo";
 
 /**
@@ -17,19 +17,28 @@ import type { TodoStatus } from "@/lib/schemas/todo";
  * checklist contradicts.
  */
 
-const subtask = (done: boolean, service: TaskSubtask["service"]): TaskSubtask => ({
-  service,
-  done,
-  fields: {},
-});
+const subtask = (
+  status: SubtaskStatus,
+  service: TaskSubtask["service"]
+): TaskSubtask => ({ service, status, fields: {} });
 
-/** A checklist of `flags.length` sub-tasks, ticked as given. */
-const checklist = (...flags: boolean[]): TaskSubtask[] => {
-  const services: TaskSubtask["service"][] = [
-    "new_nid", "new_passport", "police_clearance", "bmet_registration",
-  ];
-  return flags.map((done, index) => subtask(done, services[index]!));
-};
+const SERVICES: TaskSubtask["service"][] = [
+  "new_nid", "new_passport", "police_clearance", "bmet_registration",
+];
+
+/** A checklist of `statuses.length` sub-tasks, in the states given. */
+const list = (...statuses: SubtaskStatus[]): TaskSubtask[] =>
+  statuses.map((status, index) => subtask(status, SERVICES[index]!));
+
+/**
+ * The same, written as ticked/unticked.
+ *
+ * Kept as a second spelling because most of these cases are about the two ends
+ * of the range, and reading `checklist(true, false)` beside a rule about
+ * completion is easier than reading two enum values.
+ */
+const checklist = (...flags: boolean[]): TaskSubtask[] =>
+  list(...flags.map((done): SubtaskStatus => (done ? "completed" : "todo")));
 
 describe("allSubtasksDone", () => {
   test("is true only when every leg is ticked", () => {
@@ -68,8 +77,27 @@ describe("deriveStatusFromSubtasks", () => {
       .toBe("in_progress");
   });
 
-  test("leaves a To Do task alone while nothing has been ticked", () => {
+  test("moves it along on a leg merely started, not only on one finished", () => {
+    /* The common case on this desk: an application is lodged in the morning and
+       collected days later. If only a tick moved the task, every errand in
+       flight would sit in the first column until the day it was finished. */
+    expect(deriveStatusFromSubtasks(list("in_progress", "todo"), "todo"))
+      .toBe("in_progress");
+  });
+
+  test("leaves a To Do task alone while nothing has been started", () => {
     expect(deriveStatusFromSubtasks(checklist(false, false), "todo")).toBeNull();
+  });
+
+  test("does not complete a task whose last leg is only under way", () => {
+    // "Under way" is not "done", however close it looks on a progress bar.
+    expect(deriveStatusFromSubtasks(list("completed", "in_progress"), "in_progress"))
+      .toBeNull();
+  });
+
+  test("reopens a completed task when a leg is set back to under way", () => {
+    expect(deriveStatusFromSubtasks(list("completed", "in_progress"), "completed"))
+      .toBe("in_progress");
   });
 
   test("leaves a part-done in-progress task alone", () => {
@@ -93,10 +121,38 @@ describe("deriveStatusFromSubtasks", () => {
   });
 });
 
+describe("nextSubtaskStatus", () => {
+  test("cycles forward through the three states", () => {
+    expect(nextSubtaskStatus("todo")).toBe("in_progress");
+    expect(nextSubtaskStatus("in_progress")).toBe("completed");
+  });
+
+  test("wraps from done back to not started, so a mistap is one more tap", () => {
+    expect(nextSubtaskStatus("completed")).toBe("todo");
+  });
+
+  test("returns to where it started after three presses", () => {
+    const statuses: SubtaskStatus[] = ["todo", "in_progress", "completed"];
+    for (const status of statuses) {
+      expect(nextSubtaskStatus(nextSubtaskStatus(nextSubtaskStatus(status))))
+        .toBe(status);
+    }
+  });
+});
+
 describe("subtaskStatusHint", () => {
   test("counts down what is left", () => {
     expect(subtaskStatusHint(checklist(true, false, false)))
       .toContain("2 to go");
+  });
+
+  test("says how many legs are under way, which is the state in between", () => {
+    expect(subtaskStatusHint(list("in_progress", "in_progress", "todo")))
+      .toContain("2 under way");
+  });
+
+  test("does not mention work under way when there is none", () => {
+    expect(subtaskStatusHint(checklist(true, false))).not.toContain("under way");
   });
 
   test("explains the completed task, and how to reopen it", () => {

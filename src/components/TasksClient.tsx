@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Todo, TaskService, getDisplayStatus, STATUS_LABELS, DisplayStatus, PRIORITY_RANK,
-  formatServices, describeSubtaskFields,
+  Todo, SubtaskStatus, TaskService, getDisplayStatus, STATUS_LABELS, DisplayStatus,
+  PRIORITY_RANK, formatServices, describeSubtaskFields,
 } from "@/lib/types";
 import { redactSecrets } from "@/lib/subtasks";
 import { tallyByStatus } from "@/lib/taskInsights";
@@ -243,9 +243,9 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   );
 
   /**
-   * Ticks one leg of a task off from the list.
+   * Moves one leg of a task along from the list.
    *
-   * Not optimistic, unlike a status change: the tick can complete the task
+   * Not optimistic, unlike a status change: the change can complete the task
    * outright — the checklist drives the status, see `lib/taskStatus.ts` — and
    * guessing at that here would mean reimplementing the derivation in the
    * client and having the row flicker whenever the two disagreed. The response
@@ -257,12 +257,12 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
    * keeps the invariant that a password never lives in list state, whatever the
    * user does here.
    */
-  const toggleSubtask = useCallback(
-    async (id: string, service: TaskService, done: boolean) => {
+  const setSubtaskStatus = useCallback(
+    async (id: string, service: TaskService, status: SubtaskStatus) => {
       try {
         const updated = await api<Todo>(`/api/todos/${id}/subtasks/${service}`, {
           method: "PATCH",
-          body: { done },
+          body: { status },
         });
         const safe: Todo = { ...updated, subtasks: redactSecrets(updated.subtasks) };
         setTodos((current) => current.map((todo) => (todo._id === id ? safe : todo)));
@@ -478,7 +478,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           todos={visibleTodos}
           onView={openTask}
           onStatusChange={handleStatusChange}
-          onSubtaskToggle={toggleSubtask}
+          onSubtaskStatusChange={setSubtaskStatus}
           pendingIds={pendingIds}
         />
       ) : (
@@ -494,7 +494,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
                 onView={openTask}
                 onEdit={(item) => router.push(`/tasks/${item._id}/edit`)}
                 onStatusChange={handleStatusChange}
-                onSubtaskToggle={toggleSubtask}
+                onSubtaskStatusChange={setSubtaskStatus}
                 pending={pendingIds.has(todo._id)}
               />
             </div>

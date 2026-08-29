@@ -41,6 +41,7 @@ export default defineConfig({
         "src/lib/wizard.ts",
         "src/lib/serviceCatalogue.ts",
         "src/lib/subtasks.ts",
+        "src/lib/taskStatus.ts",
       ],
       thresholds: {
         lines: 80,

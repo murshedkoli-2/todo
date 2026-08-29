@@ -118,22 +118,52 @@ describe("subtask validation", () => {
       subtasks: [
         {
           service: "birth_certificate_correction",
-          done: true,
+          status: "completed",
           fields: { birth_number: "19998812345678901", date_of_birth: "1999-08-12" },
         },
       ],
     });
     expect(parsed.subtasks[0].fields.birth_number).toBe("19998812345678901");
+    expect(parsed.subtasks[0].status).toBe("completed");
+  });
+
+  test("accepts a sub-task that is under way", () => {
+    const parsed = createTodoSchema.parse({
+      title: "A",
+      services: ["new_passport"],
+      subtasks: [{ service: "new_passport", status: "in_progress" }],
+    });
+    expect(parsed.subtasks[0].status).toBe("in_progress");
+  });
+
+  test("rejects a status outside the three", () => {
+    expect(
+      createTodoSchema.safeParse({
+        title: "A",
+        subtasks: [{ service: "new_nid", status: "collected" }],
+      }).success
+    ).toBe(false);
+  });
+
+  test("still accepts the boolean a client loaded before the change sends", () => {
+    /* Rejecting it would fail the whole save — losing the title, the payment,
+       and everything else the form was carrying — over a key the normalizer
+       knows how to read. It is folded into `status` there, not here. */
+    const parsed = createTodoSchema.parse({
+      title: "A",
+      services: ["new_nid"],
+      subtasks: [{ service: "new_nid", done: true }],
+    });
     expect(parsed.subtasks[0].done).toBe(true);
   });
 
-  test("defaults done and fields so a bare tick is valid", () => {
+  test("defaults status and fields so a bare selection is valid", () => {
     const parsed = createTodoSchema.parse({
       title: "A",
       services: ["new_nid"],
       subtasks: [{ service: "new_nid" }],
     });
-    expect(parsed.subtasks[0]).toEqual({ service: "new_nid", done: false, fields: {} });
+    expect(parsed.subtasks[0]).toEqual({ service: "new_nid", status: "todo", fields: {} });
   });
 
   test("rejects a sub-task for a service outside the catalogue", () => {
@@ -183,13 +213,23 @@ describe("subtask validation", () => {
 });
 
 describe("subtaskPatchSchema", () => {
-  test("accepts a bare tick", () => {
+  test("accepts a bare status change", () => {
+    expect(subtaskPatchSchema.parse({ status: "in_progress" }))
+      .toEqual({ status: "in_progress" });
+  });
+
+  test("still accepts the old boolean from a client loaded before the change", () => {
     expect(subtaskPatchSchema.parse({ done: true })).toEqual({ done: true });
+  });
+
+  test("rejects a status outside the three", () => {
+    expect(subtaskPatchSchema.safeParse({ status: "collected" }).success).toBe(false);
   });
 
   test("accepts fields alone, so a value can be corrected without re-ticking", () => {
     const parsed = subtaskPatchSchema.parse({ fields: { applicant_name: "Rahim" } });
     expect(parsed.fields).toEqual({ applicant_name: "Rahim" });
+    expect(parsed.status).toBeUndefined();
     expect(parsed.done).toBeUndefined();
   });
 

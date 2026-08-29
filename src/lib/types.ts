@@ -15,10 +15,12 @@ export {
 } from "@/lib/serviceCatalogue";
 export type { ServiceFieldDef, ServiceFieldType } from "@/lib/serviceCatalogue";
 export {
-  SECRET_MASK, describeSubtaskFields, missingFieldCount, normalizeSubtasks,
-  subtaskProgress,
+  SECRET_MASK, describeSubtaskFields, isSubtaskDone, isSubtaskStarted,
+  missingFieldCount, normalizeSubtasks, resolveSubtaskStatus, subtaskProgress,
 } from "@/lib/subtasks";
-export type { DescribedField, TaskSubtask } from "@/lib/subtasks";
+export type {
+  DescribedField, SubtaskProgress, SubtaskStatus, TaskSubtask,
+} from "@/lib/subtasks";
 export type { EntryType } from "@/lib/schemas/ledger";
 export type { AccountType, TxType } from "@/lib/schemas/wallet";
 
@@ -37,7 +39,7 @@ export type {
 
 import { isPastDue } from "@/lib/dueDate";
 import type { TodoDTO } from "@/lib/dto/todo";
-import { TASK_SERVICES as SERVICE_CATALOGUE } from "@/lib/schemas/todo";
+import { TASK_SERVICES as SERVICE_CATALOGUE, TODO_STATUSES } from "@/lib/schemas/todo";
 import type {
   PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
@@ -73,6 +75,26 @@ export const STATUS_LABELS: Record<DisplayStatus, string> = {
 
 /** The three real, settable statuses — `overdue` is excluded by construction. */
 export const BOARD_COLUMNS: TodoStatus[] = ["todo", "in_progress", "completed"];
+
+/**
+ * What a sub-task can be set to, least to most finished — the order the
+ * segmented control renders, so left-to-right is progress.
+ *
+ * Taken from the schema's enum rather than written out again: a sub-task's
+ * status is the task's status, and the point of sharing the vocabulary is lost
+ * the moment there are two lists of it to keep in step.
+ */
+export const SUBTASK_STATUS_CHOICES: readonly TodoStatus[] = TODO_STATUSES;
+
+/**
+ * Compact status wording for a checklist row, where {@link STATUS_LABELS} is
+ * two words wide and sits three abreast next to a service name.
+ */
+export const SUBTASK_STATUS_SHORT_LABELS: Record<TodoStatus, string> = {
+  todo: "To do",
+  in_progress: "Doing",
+  completed: "Done",
+};
 
 /* ── Priority ─────────────────────────────────────────────────────────────
    `none` is deliberately unlabelled in most surfaces: an untriaged task should

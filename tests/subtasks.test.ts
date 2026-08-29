@@ -2,11 +2,14 @@ import { describe, expect, test } from "vitest";
 import {
   SECRET_MASK,
   describeSubtaskFields,
+  isSubtaskDone,
+  isSubtaskStarted,
   missingFieldCount,
   normalizeFields,
   normalizeSubtasks,
   readSubtasks,
   redactSecrets,
+  resolveSubtaskStatus,
   subtaskProgress,
   toStoredSubtasks,
 } from "@/lib/subtasks";
@@ -25,7 +28,7 @@ import {
 
 const subtask = (overrides: Partial<TaskSubtask> = {}): TaskSubtask => ({
   service: "nid_correction",
-  done: false,
+  status: "todo",
   fields: {},
   ...overrides,
 });
@@ -155,18 +158,79 @@ describe("normalizeSubtasks", () => {
        the catalogue is still sitting in rows the database wrote earlier. */
     const { services, subtasks } = normalizeSubtasks(
       ["new_nid", "trade_licence"],
-      [{ service: "trade_licence", done: false, fields: { anything: "x" } }]
+      [{ service: "trade_licence", status: "todo", fields: { anything: "x" } }]
     );
     expect(services).toEqual(["new_nid"]);
     expect(subtasks.map((s) => s.service)).toEqual(["new_nid"]);
   });
 
-  test("treats a missing done flag as not done", () => {
+  test("treats a row with no status at all as not started", () => {
     const { subtasks } = normalizeSubtasks(
       ["new_nid"],
-      [{ service: "new_nid", done: null, fields: null }]
+      [{ service: "new_nid", status: null, done: null, fields: null }]
     );
-    expect(subtasks[0].done).toBe(false);
+    expect(subtasks[0].status).toBe("todo");
+  });
+
+  test("keeps a row that is under way as under way", () => {
+    // The state the boolean could not hold, and the reason for the change: a
+    // job that has been lodged is neither untouched nor finished.
+    const { subtasks } = normalizeSubtasks(
+      ["new_passport"],
+      [{ service: "new_passport", status: "in_progress" }]
+    );
+    expect(subtasks[0].status).toBe("in_progress");
+  });
+
+  test("ignores a status that is not one of the three", () => {
+    const { subtasks } = normalizeSubtasks(
+      ["new_nid"],
+      [{ service: "new_nid", status: "collected" }]
+    );
+    expect(subtasks[0].status).toBe("todo");
+  });
+});
+
+describe("resolveSubtaskStatus", () => {
+  /*
+   * Every sub-task written before this feature carries `done` and no `status`,
+   * and there is no migration script — the mapping runs on every read instead.
+   * If it is wrong, a whole collection of finished work silently reopens.
+   */
+  test("maps a pre-existing ticked row onto completed", () => {
+    expect(resolveSubtaskStatus(undefined, true)).toBe("completed");
+  });
+
+  test("maps a pre-existing unticked row onto not started", () => {
+    expect(resolveSubtaskStatus(undefined, false)).toBe("todo");
+  });
+
+  test("prefers the status when a row carries both", () => {
+    // A row rewritten after the change may still have the old key sitting on
+    // it; the new field is the one that was actually set.
+    expect(resolveSubtaskStatus("in_progress", true)).toBe("in_progress");
+  });
+
+  test("reads a legacy ticked row back through the normalizer", () => {
+    const { subtasks } = normalizeSubtasks(
+      ["police_clearance"],
+      [{ service: "police_clearance", done: true }]
+    );
+    expect(subtasks[0].status).toBe("completed");
+  });
+});
+
+describe("isSubtaskDone / isSubtaskStarted", () => {
+  test("only completed counts as done", () => {
+    expect(isSubtaskDone(subtask({ status: "completed" }))).toBe(true);
+    expect(isSubtaskDone(subtask({ status: "in_progress" }))).toBe(false);
+    expect(isSubtaskDone(subtask({ status: "todo" }))).toBe(false);
+  });
+
+  test("anything past not-started counts as started", () => {
+    expect(isSubtaskStarted(subtask({ status: "in_progress" }))).toBe(true);
+    expect(isSubtaskStarted(subtask({ status: "completed" }))).toBe(true);
+    expect(isSubtaskStarted(subtask({ status: "todo" }))).toBe(false);
   });
 });
 
@@ -180,7 +244,7 @@ describe("readSubtasks", () => {
 
   test("survives a service retired from the catalogue after it was stored", () => {
     const { services, subtasks } = readSubtasks(["new_nid", "trade_licence"], [
-      { service: "trade_licence", done: true, fields: [{ key: "x", value: "y" }] },
+      { service: "trade_licence", status: "completed", fields: [{ key: "x", value: "y" }] },
     ]);
     expect(services).toEqual(["new_nid"]);
     expect(subtasks).toHaveLength(1);
@@ -211,7 +275,7 @@ describe("toStoredSubtasks", () => {
     const original = normalizeSubtasks(
       ["nid_correction", "training_admission"],
       [
-        subtask({ service: "nid_correction", done: true, fields: { nid_number: "123", password: "s3cret" } }),
+        subtask({ service: "nid_correction", status: "completed", fields: { nid_number: "123", password: "s3cret" } }),
         subtask({ service: "training_admission", fields: { course_name: "Welding" } }),
       ]
     ).subtasks;
@@ -233,18 +297,28 @@ describe("toStoredSubtasks", () => {
 });
 
 describe("subtaskProgress", () => {
-  test("counts the ticked rows", () => {
+  test("tallies the three states separately", () => {
     expect(
       subtaskProgress([
-        subtask({ service: "new_nid", done: true }),
-        subtask({ service: "new_passport", done: false }),
-        subtask({ service: "police_clearance", done: true }),
+        subtask({ service: "new_nid", status: "completed" }),
+        subtask({ service: "new_passport", status: "in_progress" }),
+        subtask({ service: "police_clearance", status: "completed" }),
+        subtask({ service: "training_admission", status: "todo" }),
       ])
-    ).toEqual({ done: 2, total: 3 });
+    ).toEqual({ todo: 1, inProgress: 1, done: 2, started: 3, total: 4 });
   });
 
-  test("reports zero of zero for a task with no services", () => {
-    expect(subtaskProgress([])).toEqual({ done: 0, total: 0 });
+  test("counts a leg that is merely under way as started but not done", () => {
+    // The distinction the whole feature rests on — and the one that decides
+    // whether a task leaves "To Do" without being finished.
+    const progress = subtaskProgress([subtask({ status: "in_progress" })]);
+    expect(progress.done).toBe(0);
+    expect(progress.started).toBe(1);
+  });
+
+  test("reports nothing of nothing for a task with no services", () => {
+    expect(subtaskProgress([]))
+      .toEqual({ todo: 0, inProgress: 0, done: 0, started: 0, total: 0 });
   });
 });
 
@@ -307,7 +381,7 @@ describe("redactSecrets", () => {
 
   test("no credential survives anywhere in the redacted payload", () => {
     const rows = redactSecrets([
-      subtask({ service: "nid_correction", done: true, fields: { password: "s3cret" } }),
+      subtask({ service: "nid_correction", status: "completed", fields: { password: "s3cret" } }),
       subtask({ service: "new_nid", fields: { applicant_name: "Rahim" } }),
     ]);
     expect(JSON.stringify(rows)).not.toContain("s3cret");

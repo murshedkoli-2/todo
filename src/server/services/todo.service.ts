@@ -3,7 +3,9 @@ import Todo from "@/models/Todo";
 import { toTodoDTO, type TodoDTO } from "@/lib/dto/todo";
 import { NotFoundError } from "@/lib/api/errors";
 import { derivePaymentStatus } from "@/lib/payment";
-import { normalizeSubtasks, readSubtasks, toStoredSubtasks } from "@/lib/subtasks";
+import {
+  normalizeSubtasks, readSubtasks, resolveSubtaskStatus, toStoredSubtasks,
+} from "@/lib/subtasks";
 import { deriveStatusFromSubtasks } from "@/lib/taskStatus";
 import type {
   CreateTodoInput, SubtaskPatchInput, TaskService, TodoListQuery, UpdateTodoInput,
@@ -243,7 +245,13 @@ export async function updateSubtask(
     subtask.service === service
       ? {
           ...subtask,
-          done: patch.done ?? subtask.done,
+          /* `status` wins; `done` is only read when a client loaded before the
+             three-state change sent the old boolean. When the patch carries
+             neither — a field edit — the stored status stays put. */
+          status:
+            patch.status === undefined && patch.done === undefined
+              ? subtask.status
+              : resolveSubtaskStatus(patch.status, patch.done),
           /* A partial: keys the caller left out keep their stored value, and a
              key sent blank is dropped by `normalizeSubtasks` below, which is
              how a value gets cleared. */
