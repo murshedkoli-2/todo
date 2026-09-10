@@ -7,15 +7,15 @@ import { useSession } from "next-auth/react";
 import AppShell from "@/components/shell/AppShell";
 import QuickAddBar from "@/components/QuickAddBar";
 import StatCard from "@/components/ui/StatCard";
+import TodoCard from "@/components/TodoCard";
 import Money from "@/components/ui/Money";
-import PriorityFlag from "@/components/ui/PriorityFlag";
 import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { api, errorMessage } from "@/lib/apiClient";
 import { useServerData } from "@/hooks/useServerData";
-import { formatDueLabel, isPastDue } from "@/lib/dueDate";
+import { isPastDue } from "@/lib/dueDate";
 import type { Todo, WalletAccount, LedgerPersonWithBalance } from "@/lib/types";
-import type { CreateTodoInput } from "@/lib/schemas/todo";
+import type { CreateTodoInput, TodoStatus } from "@/lib/schemas/todo";
 import {
   TasksIcon,
   LedgerIcon,
@@ -23,7 +23,6 @@ import {
   AlertIcon,
   CheckIcon,
   PlusIcon,
-  CalendarIcon,
   ChevronRightIcon,
   CashIcon,
   PhoneIcon,
@@ -60,6 +59,8 @@ export default function OverviewClient({
 
   const [todos, setTodos] = useServerData<Todo[]>(initialTodos);
   const [counts, setCounts] = useState<Record<string, number>>(taskCounts);
+  /** Cards whose status change is still in flight, so each can show a spinner. */
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
 
   const userName = session?.user?.name ? session.user.name.split(" ")[0] : "there";
 
@@ -87,12 +88,16 @@ export default function OverviewClient({
   const completedCount = counts.completed ?? 0;
   const activeCount = todoCount + inProgressCount;
 
-  // Urgent and upcoming tasks: not completed, sorted by urgency & due date
-  const urgentTasks = useMemo(() => {
-    return todos
-      .filter((t) => t.status !== "completed")
-      .slice(0, 6);
-  }, [todos]);
+  /*
+   * Every task still open, in the order the server sorted them. This was a
+   * six-item preview; the overview now carries the full working set as cards,
+   * so the page answers "what is on my plate" without a hop to /tasks.
+   * Completed work stays out — it is reported by the tally card above.
+   */
+  const activeTasks = useMemo(
+    () => todos.filter((t) => t.status !== "completed"),
+    [todos]
+  );
 
   const overdueCount = useMemo(() => {
     return todos.filter(
@@ -124,30 +129,50 @@ export default function OverviewClient({
     }
   };
 
-  // Toggle task completion from overview
-  const toggleTaskStatus = async (task: Todo) => {
-    const newStatus = task.status === "completed" ? "todo" : "completed";
-    const previousTodos = [...todos];
+  /*
+   * Any of the three states, not just the completed toggle the list row had:
+   * a card carries the full status menu, so the handler has to accept whatever
+   * it picks. The tallies are adjusted from the task's own previous status
+   * rather than recomputed, which keeps the header counts honest mid-flight.
+   */
+  const changeTaskStatus = async (id: string, status: TodoStatus) => {
+    const task = todos.find((t) => t._id === id);
+    if (!task || task.status === status) return;
 
-    // Optimistic update
+    const previousTodos = todos;
+    const previousStatus = task.status;
+
     setTodos((current) =>
-      current.map((t) => (t._id === task._id ? { ...t, status: newStatus } : t))
+      current.map((t) => (t._id === id ? { ...t, status } : t))
     );
     setCounts((curr) => ({
       ...curr,
-      [task.status]: Math.max(0, (curr[task.status] ?? 1) - 1),
-      [newStatus]: (curr[newStatus] ?? 0) + 1,
+      [previousStatus]: Math.max(0, (curr[previousStatus] ?? 1) - 1),
+      [status]: (curr[status] ?? 0) + 1,
     }));
+    setPendingIds((curr) => new Set(curr).add(id));
 
     try {
-      await api(`/api/todos/${task._id}`, {
-        method: "PATCH",
-        body: { status: newStatus },
-      });
-      toast.success(newStatus === "completed" ? "Task completed." : "Task reopened.");
+      await api(`/api/todos/${id}`, { method: "PATCH", body: { status } });
+      toast.success(
+        status === "completed" ? "Task completed." : "Task updated."
+      );
     } catch (caught: unknown) {
+      // Restore both halves together — a rolled-back list beside adjusted
+      // counts would show a tally that no card on the page accounts for.
       setTodos(previousTodos);
+      setCounts((curr) => ({
+        ...curr,
+        [previousStatus]: (curr[previousStatus] ?? 0) + 1,
+        [status]: Math.max(0, (curr[status] ?? 1) - 1),
+      }));
       toast.error(errorMessage(caught));
+    } finally {
+      setPendingIds((curr) => {
+        const next = new Set(curr);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -183,12 +208,18 @@ export default function OverviewClient({
       </div>
 
       {/* ── Top Metric Cards ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 animate-stagger">
+      {/*
+        Five columns, and the headline takes two of them. Four equal cards gave
+        the day's net worth exactly as much room as the count of overdue tasks,
+        which is a layout with no opinion about what the page is for.
+      */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8 animate-stagger">
         <StatCard
+          feature
           icon={<WalletIcon className="w-5 h-5" />}
           label="Total Net Worth"
-          value={<Money minor={totalNetWorthMinor} size="lg" tone="neutral" />}
-          hint={`${initialAccounts.length} active account${initialAccounts.length === 1 ? "" : "s"}`}
+          value={<Money minor={totalNetWorthMinor} size="hero" tone="neutral" />}
+          hint={`Across ${initialAccounts.length} active account${initialAccounts.length === 1 ? "" : "s"}`}
           color="var(--accent)"
           onClick={() => router.push("/wallet")}
         />
@@ -230,7 +261,7 @@ export default function OverviewClient({
               <div className="flex items-center gap-2">
                 <h2 className="text-section">Priorities & Up Next</h2>
                 <span className="pill bg-sunken text-ink-muted text-xs font-semibold">
-                  {urgentTasks.length}
+                  {activeTasks.length}
                 </span>
               </div>
               <Link
@@ -242,7 +273,7 @@ export default function OverviewClient({
               </Link>
             </div>
 
-            {urgentTasks.length === 0 ? (
+            {activeTasks.length === 0 ? (
               <EmptyState
                 icon={<CheckIcon className="w-6 h-6" />}
                 title="All caught up!"
@@ -255,61 +286,29 @@ export default function OverviewClient({
                 }
               />
             ) : (
-              <div className="flex flex-col divide-y divide-line">
-                {urgentTasks.map((task) => {
-                  const overdue = task.dueDate && isPastDue(task.dueDate);
-                  return (
-                    <div
-                      key={task._id}
-                      className="py-3 flex items-center justify-between gap-3 group hover:bg-hover-overlay rounded-well px-2 -mx-2 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => toggleTaskStatus(task)}
-                          aria-label={`Complete ${task.title}`}
-                          className="w-5 h-5 rounded border border-line flex items-center justify-center text-transparent hover:text-ink-muted hover:border-accent flex-shrink-0 transition-colors"
-                        >
-                          <CheckIcon className="w-3.5 h-3.5" />
-                        </button>
-
-                        <div className="min-w-0 flex-1">
-                          <Link
-                            href={`/tasks/${task._id}`}
-                            className="text-sm font-semibold text-ink truncate block hover:text-accent transition-colors"
-                          >
-                            {task.title}
-                          </Link>
-
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-muted flex-wrap">
-                            {task.dueDate && (
-                              <span
-                                className={`flex items-center gap-1 ${
-                                  overdue ? "text-red font-semibold" : ""
-                                }`}
-                              >
-                                <CalendarIcon className="w-3 h-3" />
-                                {formatDueLabel(task.dueDate)}
-                              </span>
-                            )}
-
-                            {task.paymentAmountMinor && (
-                              <span>
-                                • Total: <Money minor={task.paymentAmountMinor} size="sm" tone="neutral" />
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {task.priority !== "none" && (
-                          <PriorityFlag priority={task.priority} />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              /*
+               * The same card the tasks page grids, at the column width the
+               * overview has to spend: two across from `sm`, three once the
+               * viewport is wide enough that two would leave the cards
+               * stretched. Reusing TodoCard rather than restyling a row keeps
+               * one definition of what a task looks like.
+               */
+              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4 animate-stagger">
+                {activeTasks.map((task, index) => (
+                  <div
+                    key={task._id}
+                    className="animate-fade-in-up flex"
+                    style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
+                  >
+                    <TodoCard
+                      todo={task}
+                      onView={(item) => router.push(`/tasks/${item._id}`)}
+                      onEdit={(item) => router.push(`/tasks/${item._id}/edit`)}
+                      onStatusChange={changeTaskStatus}
+                      pending={pendingIds.has(task._id)}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </section>
