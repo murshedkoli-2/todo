@@ -140,8 +140,13 @@ npm run start
 
 1. Push your repo to GitHub
 2. Import the project in [Vercel](https://vercel.com)
-3. Set all environment variables from `.env.local.example` in Vercel → Settings → Environment Variables
-4. Set `NEXTAUTH_URL` to your production domain (e.g. `https://taskflow.vercel.app`)
+3. Set the environment variables from `.env.local.example` in Vercel → Settings → Environment Variables
+4. **Leave `NEXTAUTH_URL` out.** It is a local-development variable: its origin
+   overrides the real request host for every auth redirect, so copying the
+   example value verbatim sends deployed users to `http://localhost:3000/login`.
+   The app sets `trustHost: true` and derives the origin from the request. Only
+   set it — to the full production URL — if you self-host behind a proxy that
+   does not rewrite the `Host` header.
 5. Deploy ✓
 
 ### Required Environment Variables
@@ -150,7 +155,7 @@ npm run start
 |----------|-------------|
 | `MONGODB_URI` | MongoDB Atlas connection string |
 | `NEXTAUTH_SECRET` | Random secret (`openssl rand -hex 32`) |
-| `NEXTAUTH_URL` | Full public URL of your deployment |
+| `NEXTAUTH_URL` | Local development only — full public URL. Omit on Vercel (see step 4). |
 | `GMAIL_USER` | Gmail address for OTP emails |
 | `GMAIL_APP_PASSWORD` | Gmail App Password (not your login password) |
 | `IMGBB_API_KEY` | ImgBB API key for image uploads |

@@ -1,5 +1,5 @@
 import NextAuth from "next-auth";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { authConfig, isPublicRoute } from "@/auth.config";
 import { THEME_SCRIPT } from "@/lib/themeScript";
 
@@ -68,6 +68,30 @@ function contentSecurityPolicy(
   ].join("; ");
 }
 
+/**
+ * Builds an absolute redirect URL anchored to the *real* request host.
+ *
+ * `next-auth`'s `auth()` wrapper rewrites `request.nextUrl` to the origin of
+ * `AUTH_URL`/`NEXTAUTH_URL` before handing the request over (see
+ * `next-auth/lib/env.js#reqWithEnvURL`), and it does so whether or not
+ * `trustHost` is set. A deployment that still carries the development value of
+ * that variable would therefore redirect visitors to `http://localhost:3000`.
+ * Reading the forwarded headers instead keeps redirects on the origin the
+ * browser actually asked for.
+ */
+function requestUrl(path: string, request: NextRequest): URL {
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!host) return new URL(path, request.nextUrl);
+
+  const proto =
+    request.headers.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
+      ? "http"
+      : "https");
+  return new URL(path, `${proto}://${host}`);
+}
+
 export default auth(async (request) => {
   const { pathname } = request.nextUrl;
   const isSignedIn = Boolean(request.auth?.user?.id);
@@ -77,7 +101,7 @@ export default auth(async (request) => {
      Previously every page and route re-implemented this check. Centralising
      it means a new page is protected by default rather than by remembering. */
   if (!isSignedIn && !isPublicRoute(pathname) && !isApiRoute) {
-    const loginUrl = new URL("/login", request.nextUrl);
+    const loginUrl = requestUrl("/login", request);
     // Preserve the destination so login can return the user to it.
     if (pathname !== "/") loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
@@ -85,7 +109,7 @@ export default auth(async (request) => {
 
   // A signed-in user on an auth page has nothing to do there.
   if (isSignedIn && isPublicRoute(pathname)) {
-    return NextResponse.redirect(new URL("/", request.nextUrl));
+    return NextResponse.redirect(requestUrl("/", request));
   }
 
   const nonce = crypto.randomUUID().replace(/-/g, "");
