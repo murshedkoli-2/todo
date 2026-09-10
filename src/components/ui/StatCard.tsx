@@ -13,10 +13,18 @@ interface StatCardProps {
   /** Turns the card into a filter toggle. */
   onClick?: () => void;
   active?: boolean;
+  /**
+   * Marks this as the row's headline statistic: the card spans two grid
+   * columns and picks up `.card-tile.is-feature`, which carries the brand wash
+   * and establishes the inline-size container that `.money-hero` sizes itself
+   * against. A row should hold at most one.
+   */
+  feature?: boolean;
 }
 
 export default function StatCard({
   icon, label, value, hint, color, progress, onClick, active = false,
+  feature = false,
 }: StatCardProps) {
   const Tag = onClick ? "button" : "div";
 
@@ -25,7 +33,11 @@ export default function StatCard({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
-      className={`card-tile !p-4 sm:!p-5 ${onClick ? "cursor-pointer" : ""}`}
+      className={[
+        "card-tile !p-4 sm:!p-5",
+        feature ? "is-feature col-span-2" : "",
+        onClick ? "cursor-pointer" : "",
+      ].filter(Boolean).join(" ")}
       style={{
         borderColor: active ? color : undefined,
         boxShadow: active
