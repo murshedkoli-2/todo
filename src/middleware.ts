@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig, isPublicRoute } from "@/auth.config";
 import { THEME_SCRIPT } from "@/lib/themeScript";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 const { auth } = NextAuth(authConfig);
 
@@ -71,25 +72,13 @@ function contentSecurityPolicy(
 /**
  * Builds an absolute redirect URL anchored to the *real* request host.
  *
- * `next-auth`'s `auth()` wrapper rewrites `request.nextUrl` to the origin of
- * `AUTH_URL`/`NEXTAUTH_URL` before handing the request over (see
- * `next-auth/lib/env.js#reqWithEnvURL`), and it does so whether or not
- * `trustHost` is set. A deployment that still carries the development value of
- * that variable would therefore redirect visitors to `http://localhost:3000`.
- * Reading the forwarded headers instead keeps redirects on the origin the
- * browser actually asked for.
+ * `request.nextUrl` cannot be trusted for this — `next-auth` rewrites its
+ * origin from `AUTH_URL`/`NEXTAUTH_URL`. See `@/lib/requestOrigin` for the full
+ * account and the tests that hold it. It stays the fallback for the case where
+ * the request carries no host header at all.
  */
 function requestUrl(path: string, request: NextRequest): URL {
-  const host =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!host) return new URL(path, request.nextUrl);
-
-  const proto =
-    request.headers.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https");
-  return new URL(path, `${proto}://${host}`);
+  return new URL(path, requestOrigin(request.headers) ?? request.nextUrl);
 }
 
 export default auth(async (request) => {

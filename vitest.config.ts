@@ -42,6 +42,7 @@ export default defineConfig({
         "src/lib/serviceCatalogue.ts",
         "src/lib/subtasks.ts",
         "src/lib/taskStatus.ts",
+        "src/lib/requestOrigin.ts",
       ],
       thresholds: {
         lines: 80,
