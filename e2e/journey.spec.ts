@@ -397,8 +397,68 @@ test("records a ledger entry and updates the net position", async ({ page }) => 
   // Running balance is computed at read time from the ordered ledger.
   await expect(page.getByRole("dialog")).toContainText("+৳500.00");
 
+  /*
+   * A repayment against it. The balance moving is only half of what the person
+   * wants to read — the other half is how much of the ৳500 has come back, which
+   * is derived from the same two totals rather than stored (see
+   * `lib/ledgerBalance.ts`), so it has to agree with the history above it.
+   */
+  await detail.getByRole("radio", { name: /I owe them/ }).click();
+  await detail.getByLabel("Amount").fill("200");
+  await continueTo(detail, "details");
+  await detail.getByRole("button", { name: "Add transaction" }).click();
+
+  await expect(detail).toContainText("+৳300.00");
+  await expect(detail).toContainText("৳200.00 of ৳500.00 settled");
+
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await expect(row).toContainText("+৳500.00");
+  await expect(row).toContainText("+৳300.00");
+  // The same figures, compacted, on the list row.
+  await expect(row).toContainText("৳200 of ৳500 back");
+});
+
+test("adds a receivable from the ledger page, creating the person with it", async ({ page }) => {
+  const name = `E2E quick ${stamp()}`;
+
+  await page.goto("/ledger");
+  await page.getByRole("button", { name: "Add entry" }).click();
+
+  /* The whole point of this flow: no person exists yet, and one screen creates
+     them along with the entry. The old path was add-person wizard, close, find
+     the row, open it, transaction wizard. */
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/^Amount/).fill("1250");
+  await dialog.getByRole("combobox").fill(name);
+  await expect(dialog).toContainText("New person");
+  await dialog.getByRole("button", { name: "Add entry" }).click();
+
+  const row = page.getByRole("button", { name: new RegExp(name) });
+  await expect(row).toContainText("+৳1,250.00");
+
+  /*
+   * The same name in a different case must land on the same person. A miss
+   * here does not error — it silently splits one balance across two rows that
+   * both look right, which is the failure this flow is most exposed to.
+   */
+  await page.getByRole("button", { name: "Add entry" }).click();
+  const second = page.getByRole("dialog");
+  await second.getByRole("radio", { name: /I owe them/ }).click();
+  await second.getByLabel(/^Amount/).fill("250");
+  await second.getByRole("combobox").fill(name.toLowerCase());
+  await expect(second).toContainText(`Adds to ${name}`);
+  // The preview states the settled balance before the write: 1250 − 250.
+  await expect(second).toContainText("+৳1,000.00");
+  await second.getByRole("button", { name: "Add entry" }).click();
+
+  await expect(page.getByRole("button", { name: new RegExp(name) })).toHaveCount(1);
+  await expect(row).toContainText("+৳1,000.00");
+
+  // Clean up so reruns do not accumulate people.
+  await row.click();
+  const detail = page.getByRole("dialog");
+  await detail.getByRole("button", { name: `Delete ${name}` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(name) })).toHaveCount(0);
 });
 
 test("keeps a wallet balance consistent with its transactions", async ({ page }) => {

@@ -1,6 +1,6 @@
 import type { Types } from "mongoose";
 import { readMinor } from "@/lib/money";
-import { dueMinor, legacyPaidMinor } from "@/lib/payment";
+import { derivePaymentStatus, dueMinor, legacyPaidMinor } from "@/lib/payment";
 import { readSubtasks, redactSecrets } from "@/lib/subtasks";
 import type { StoredField, TaskSubtask } from "@/lib/subtasks";
 import type {
@@ -8,6 +8,15 @@ import type {
 } from "@/lib/schemas/todo";
 
 export type { TaskSubtask };
+
+export interface TaskInstallmentDTO {
+  _id: string;
+  amountMinor: number;
+  date: string;
+  paymentMethod: PaymentMethod;
+  note?: string;
+  createdAt: string;
+}
 
 /** The shape the client receives. Amounts are integer minor units. */
 export interface TodoDTO {
@@ -38,10 +47,14 @@ export interface TodoDTO {
   featureImage: string | null;
   /** The job's total cost. */
   paymentAmountMinor: number | null;
-  /** Received so far. `null` means "not recorded", which is not the same as 0. */
+  /** Initial advance/down payment received against that total. */
+  initialPaymentMinor: number | null;
+  /** Received so far (initial + installments). `null` means "not recorded", which is not the same as 0. */
   paidAmountMinor: number | null;
   /** Still owed. Derived, never stored — see `lib/payment.ts`. */
   dueAmountMinor: number | null;
+  /** Subsequent installments recorded against this task. */
+  installments: TaskInstallmentDTO[];
   paymentCurrency: string;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
@@ -70,8 +83,17 @@ export interface TodoSource {
   images?: string[] | null;
   featureImage?: string | null;
   paymentAmountMinor?: number | null;
+  initialPaymentMinor?: number | null;
   paidAmountMinor?: number | null;
   paymentAmount?: number | null;
+  installments?: Array<{
+    _id?: Types.ObjectId | string;
+    amountMinor: number;
+    date: Date | string;
+    paymentMethod?: string | null;
+    note?: string | null;
+    createdAt?: Date | string;
+  }> | null;
   paymentCurrency?: string | null;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
@@ -104,20 +126,61 @@ export function toTodoDTO(
   const hasPayment =
     source.paymentAmountMinor != null || source.paymentAmount != null;
 
-  const status = (source.paymentStatus ?? "unpaid") as PaymentStatus;
+  const rawStatus = (source.paymentStatus ?? "unpaid") as PaymentStatus;
   const totalMinor = hasPayment
     ? readMinor(source.paymentAmountMinor, source.paymentAmount, currency)
     : null;
 
+  /* Rebuild and format installments array. */
+  const rawInstallments = source.installments ?? [];
+  const installments: TaskInstallmentDTO[] = rawInstallments.map((inst, idx) => {
+    const id = inst._id ? inst._id.toString() : `inst_${idx}`;
+    const dateObj = inst.date instanceof Date ? inst.date : new Date(inst.date);
+    const createdObj = inst.createdAt instanceof Date
+      ? inst.createdAt
+      : inst.createdAt
+        ? new Date(inst.createdAt)
+        : dateObj;
+
+    return {
+      _id: id,
+      amountMinor: inst.amountMinor,
+      date: isNaN(dateObj.getTime()) ? new Date().toISOString() : dateObj.toISOString(),
+      paymentMethod: (inst.paymentMethod ?? "cash") as PaymentMethod,
+      note: inst.note ?? undefined,
+      createdAt: isNaN(createdObj.getTime()) ? new Date().toISOString() : createdObj.toISOString(),
+    };
+  });
+
+  const installmentsSum = installments.reduce((sum, i) => sum + i.amountMinor, 0);
+
   /*
-   * Rows written before the paid column existed have to have their figure
+   * Rows written before the paid/initial column existed have to have their figure
    * inferred from the total and the status the user set by hand, or reopening
    * an old task would show it as unpaid regardless of what it said yesterday.
    */
-  const paidMinor =
-    source.paidAmountMinor != null
-      ? source.paidAmountMinor
-      : legacyPaidMinor(totalMinor, status);
+  let initialMinor: number | null;
+  let paidMinor: number | null;
+
+  if (installments.length === 0) {
+    paidMinor =
+      source.paidAmountMinor != null
+        ? source.paidAmountMinor
+        : legacyPaidMinor(totalMinor, rawStatus);
+    initialMinor = source.initialPaymentMinor ?? paidMinor;
+  } else {
+    initialMinor =
+      source.initialPaymentMinor != null
+        ? source.initialPaymentMinor
+        : source.paidAmountMinor != null
+          ? Math.max(0, source.paidAmountMinor - installmentsSum)
+          : 0;
+    paidMinor = (initialMinor ?? 0) + installmentsSum;
+  }
+
+  const status = hasPayment || paidMinor != null
+    ? derivePaymentStatus(totalMinor, paidMinor)
+    : rawStatus;
 
   /* `services` is taken from the reconciliation rather than read straight off
      the document, so the two fields the client receives cannot disagree even if
@@ -147,8 +210,10 @@ export function toTodoDTO(
     images: source.images ?? [],
     featureImage: source.featureImage ?? null,
     paymentAmountMinor: totalMinor,
+    initialPaymentMinor: initialMinor,
     paidAmountMinor: paidMinor,
     dueAmountMinor: dueMinor(totalMinor, paidMinor),
+    installments,
     paymentCurrency: currency,
     paymentMethod: (source.paymentMethod ?? "unset") as PaymentMethod,
     paymentStatus: status,

@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchIcon } from "@/components/ui/icons";
+import { useStuck } from "@/hooks/useStuck";
+
+/** The app header's height — what this toolbar pins itself beneath. */
+const HEADER_HEIGHT = 64;
 
 export interface SortOption {
   value: string;
@@ -65,8 +69,23 @@ export default function PageToolbar({
     [onSearchChange]
   );
 
+  const { sentinelRef, stuck } = useStuck(HEADER_HEIGHT);
+
   return (
-    <div className="flex flex-col gap-4 mb-6 sm:mb-7">
+    <>
+      {/* Zero-height marker: the toolbar has stuck once this scrolls past the
+          header's lower edge. See `useStuck`. */}
+      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
+
+      {/*
+        The negative gutters let the frosted wash bleed to the page edges while
+        the controls stay on the content grid — a bar that stopped short of the
+        margins would read as a floating card that happens to be pinned.
+      */}
+      <div
+        className="page-toolbar flex flex-col gap-4 pt-3 pb-4 mb-4 sm:mb-5 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
+        data-stuck={stuck}
+      >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         {/* Title + count */}
         <div className="flex items-baseline gap-2.5 mr-auto min-w-0">
@@ -140,6 +159,7 @@ export default function PageToolbar({
           {subtitle}
         </p>
       )}
-    </div>
+      </div>
+    </>
   );
 }

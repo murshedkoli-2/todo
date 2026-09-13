@@ -95,13 +95,13 @@ export default function OverviewClient({
    * Completed work stays out — it is reported by the tally card above.
    */
   const activeTasks = useMemo(
-    () => todos.filter((t) => t.status !== "completed"),
+    () => todos.filter((t) => t.status !== "completed" && t.status !== "canceled"),
     [todos]
   );
 
   const overdueCount = useMemo(() => {
     return todos.filter(
-      (t) => t.status !== "completed" && t.dueDate && isPastDue(t.dueDate)
+      (t) => t.status !== "completed" && t.status !== "canceled" && t.dueDate && isPastDue(t.dueDate)
     ).length;
   }, [todos]);
 
@@ -142,9 +142,10 @@ export default function OverviewClient({
     const previousTodos = todos;
     const previousStatus = task.status;
 
-    setTodos((current) =>
-      current.map((t) => (t._id === id ? { ...t, status } : t))
-    );
+    setTodos((current) => {
+      const updated = { ...task, status, updatedAt: new Date().toISOString() };
+      return [updated, ...current.filter((t) => t._id !== id)];
+    });
     setCounts((curr) => ({
       ...curr,
       [previousStatus]: Math.max(0, (curr[previousStatus] ?? 1) - 1),
@@ -153,9 +154,14 @@ export default function OverviewClient({
     setPendingIds((curr) => new Set(curr).add(id));
 
     try {
-      await api(`/api/todos/${id}`, { method: "PATCH", body: { status } });
+      const updated = await api<Todo>(`/api/todos/${id}`, { method: "PATCH", body: { status } });
+      setTodos((current) => [updated, ...current.filter((t) => t._id !== id)]);
       toast.success(
-        status === "completed" ? "Task completed." : "Task updated."
+        status === "completed"
+          ? "Task completed."
+          : status === "canceled"
+            ? "Task canceled."
+            : "Task updated."
       );
     } catch (caught: unknown) {
       // Restore both halves together — a rolled-back list beside adjusted

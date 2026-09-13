@@ -14,7 +14,7 @@ export type StatusTally = Record<DisplayStatus, number>;
 
 /** How many tasks sit in each displayed status, `overdue` included. */
 export function tallyByStatus(todos: ReadonlyArray<Todo>): StatusTally {
-  const tally: StatusTally = { todo: 0, in_progress: 0, completed: 0, overdue: 0 };
+  const tally: StatusTally = { todo: 0, in_progress: 0, completed: 0, canceled: 0, overdue: 0 };
   for (const todo of todos) tally[getDisplayStatus(todo)] += 1;
   return tally;
 }
@@ -25,7 +25,9 @@ export function tallyByStatus(todos: ReadonlyArray<Todo>): StatusTally {
  * an arbitrary "next" task would be worse than none.
  */
 export function pickFocusTask(todos: ReadonlyArray<Todo>): Todo | null {
-  const dated = todos.filter((todo) => todo.status !== "completed" && todo.dueDate);
+  const dated = todos.filter(
+    (todo) => todo.status !== "completed" && todo.status !== "canceled" && todo.dueDate
+  );
   if (dated.length === 0) return null;
 
   return [...dated].sort(

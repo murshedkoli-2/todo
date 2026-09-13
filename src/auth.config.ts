@@ -10,7 +10,7 @@ import type { NextAuthConfig } from "next-auth";
  */
 
 /** Routes reachable without a session. Everything else requires one. */
-const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password"];
+const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password", "/dev-preview"];
 
 export function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(

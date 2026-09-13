@@ -19,20 +19,10 @@ import {
   fieldDef, isTaskService,
 } from "@/lib/serviceCatalogue";
 import type { TaskService } from "@/lib/serviceCatalogue";
-import { TODO_STATUSES } from "@/lib/schemas/todo";
-import type { TodoStatus } from "@/lib/schemas/todo";
+import { SUBTASK_STATUSES } from "@/lib/schemas/todo";
+import type { SubtaskStatus } from "@/lib/schemas/todo";
 
-/**
- * How far along one leg of the errand is.
- *
- * Deliberately the same three values as the task's own status rather than a
- * vocabulary of its own. A sub-task *is* a task on this desk — "at the passport
- * office" is the thing an operator wants to record, and it is the same thing
- * whether it is said about the whole errand or about one leg of it. Sharing the
- * enum also means one set of labels, one set of colours, and a checklist whose
- * rows read in the same language as the badge at the top of the page.
- */
-export type SubtaskStatus = TodoStatus;
+export type { SubtaskStatus };
 
 /** One ticked service and everything recorded against it. */
 export interface TaskSubtask {
@@ -70,9 +60,9 @@ export interface StoredField {
   value: string;
 }
 
-/** True for one of the three statuses, narrowing an untrusted string. */
+/** True for one of the three subtask statuses, narrowing an untrusted string. */
 export function isSubtaskStatus(value: unknown): value is SubtaskStatus {
-  return typeof value === "string" && (TODO_STATUSES as readonly string[]).includes(value);
+  return typeof value === "string" && (SUBTASK_STATUSES as readonly string[]).includes(value);
 }
 
 /**

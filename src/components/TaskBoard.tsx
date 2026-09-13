@@ -53,7 +53,7 @@ export default function TaskBoard({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start animate-stagger">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start animate-stagger">
       {BOARD_COLUMNS.map((status) => {
         const items = columns.get(status) ?? [];
         const color = STATUS_COLORS[status];
@@ -147,7 +147,7 @@ export default function TaskBoard({
                               ) : (
                                 <CalendarIcon className="w-3 h-3" />
                               )}
-                              {formatDueLabel(todo.dueDate, { relative: todo.status !== "completed" })}
+                              {formatDueLabel(todo.dueDate, { relative: todo.status !== "completed" && todo.status !== "canceled" })}
                             </span>
                           )}
                           {todo.paymentAmountMinor != null && (

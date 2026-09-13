@@ -8,7 +8,8 @@ import {
 } from "@/lib/subtasks";
 import { deriveStatusFromSubtasks } from "@/lib/taskStatus";
 import type {
-  CreateTodoInput, SubtaskPatchInput, TaskService, TodoListQuery, UpdateTodoInput,
+  CreateTodoInput, InstallmentInput, SubtaskPatchInput, TaskService, TodoListQuery,
+  UpdatePaymentInput, UpdateTodoInput,
 } from "@/lib/schemas/todo";
 
 export interface TodoPage {
@@ -43,7 +44,7 @@ export async function listTodos(
 
   const [documents, total] = await Promise.all([
     Todo.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
@@ -75,34 +76,38 @@ export async function createTodo(
      cannot end up without a row. */
   const { services, subtasks } = normalizeSubtasks(input.services, input.subtasks);
 
-  const todo = await Todo.create({
-    userId: new Types.ObjectId(userId),
-    title: input.title,
-    description: input.description,
-    /* A task created with every sub-task already ticked — the wizard allows it,
-       and it is how work finished before it was written down gets recorded — is
-       finished on arrival. The same rule applies here as on every later write,
-       so a task cannot be born in the inconsistent state updates forbid. */
-    status: deriveStatusFromSubtasks(subtasks, input.status) ?? input.status,
-    priority: input.priority,
-    dueDate: input.dueDate ?? undefined,
-    services,
-    subtasks: toStoredSubtasks(subtasks),
-    images: input.images,
-    // A feature image the caller did not upload into `images` would render a
-    // cover with no matching gallery entry, so it is folded in here.
-    featureImage: input.featureImage ?? input.images[0] ?? undefined,
-    paymentAmountMinor: input.paymentAmount ?? undefined,
-    paidAmountMinor: input.paidAmount ?? undefined,
-    paymentCurrency: input.paymentCurrency,
-    paymentMethod: input.paymentMethod,
-    // Derived from the amounts rather than taken from the caller: the two are
-    // the same fact, and a stored status that disagrees with them is wrong.
-    paymentStatus: derivePaymentStatus(input.paymentAmount, input.paidAmount),
-  });
+    const initialMinor = input.initialPayment ?? input.paidAmount ?? undefined;
 
-  return toTodoDTO(todo);
-}
+    const todo = await Todo.create({
+      userId: new Types.ObjectId(userId),
+      title: input.title,
+      description: input.description,
+      /* A task created with every sub-task already ticked — the wizard allows it,
+         and it is how work finished before it was written down gets recorded — is
+         finished on arrival. The same rule applies here as on every later write,
+         so a task cannot be born in the inconsistent state updates forbid. */
+      status: deriveStatusFromSubtasks(subtasks, input.status) ?? input.status,
+      priority: input.priority,
+      dueDate: input.dueDate ?? undefined,
+      services,
+      subtasks: toStoredSubtasks(subtasks),
+      images: input.images,
+      // A feature image the caller did not upload into `images` would render a
+      // cover with no matching gallery entry, so it is folded in here.
+      featureImage: input.featureImage ?? input.images[0] ?? undefined,
+      paymentAmountMinor: input.paymentAmount ?? undefined,
+      initialPaymentMinor: initialMinor,
+      paidAmountMinor: initialMinor,
+      installments: [],
+      paymentCurrency: input.paymentCurrency,
+      paymentMethod: input.paymentMethod,
+      // Derived from the amounts rather than taken from the caller: the two are
+      // the same fact, and a stored status that disagrees with them is wrong.
+      paymentStatus: derivePaymentStatus(input.paymentAmount, initialMinor),
+    });
+
+    return toTodoDTO(todo);
+  }
 
 export async function updateTodo(
   userId: string,
@@ -151,28 +156,13 @@ export async function updateTodo(
     // the `readMinor` fallback once the new column is unset.
     unset.paymentAmount = "";
   }
-  if ("paidAmount" in input) assign("paidAmountMinor", input.paidAmount);
+  if ("initialPayment" in input) assign("initialPaymentMinor", input.initialPayment);
+  if ("paidAmount" in input && !("initialPayment" in input)) assign("initialPaymentMinor", input.paidAmount);
 
-  /*
-   * Payment status follows the two amounts, so it has to be recomputed
-   * whenever either moves — and a PATCH may carry only one of them. The
-   * missing side is read back from the stored task through the DTO, so this
-   * agrees with the figures the client was shown rather than re-deriving them
-   * a second way.
-   *
-   * Only the payment-touching patches pay for the extra read; the far more
-   * common `{ status }` from a board drag does not.
-   */
-  /*
-   * The checklist drives the status — see `lib/taskStatus.ts`. It needs the
-   * status as stored, because the interesting cases are the transitions *out*
-   * of what is already there: reopening a completed task, or moving an
-   * untouched one along. An explicit `status` in the same payload wins, since
-   * that is the operator saying so directly.
-   */
+  const hasPaymentAmount = "paymentAmount" in input;
+  const hasInitialPayment = "initialPayment" in input || "paidAmount" in input;
   const derivesStatus = written !== null && input.status === undefined;
-  const needsStored =
-    derivesStatus || "paymentAmount" in input || "paidAmount" in input;
+  const needsStored = derivesStatus || hasPaymentAmount || hasInitialPayment;
 
   /* One read serves both derivations. The common patches — a board drag's
      `{ status }`, a rename — still take none. */
@@ -181,12 +171,23 @@ export async function updateTodo(
     if (!current) throw new NotFoundError("Task not found");
     const stored = toTodoDTO(current);
 
-    if ("paymentAmount" in input || "paidAmount" in input) {
-      const total =
-        "paymentAmount" in input ? input.paymentAmount ?? null : stored.paymentAmountMinor;
-      const paid = "paidAmount" in input ? input.paidAmount ?? null : stored.paidAmountMinor;
+    if (hasPaymentAmount || hasInitialPayment) {
+      const total = hasPaymentAmount
+        ? input.paymentAmount ?? null
+        : stored.paymentAmountMinor;
 
-      set.paymentStatus = derivePaymentStatus(total, paid);
+      const installmentsSum = stored.installments.reduce((sum, i) => sum + i.amountMinor, 0);
+
+      const initial = hasInitialPayment
+        ? ("initialPayment" in input ? input.initialPayment ?? null : input.paidAmount ?? null)
+        : stored.initialPaymentMinor;
+
+      const totalPaid = initial != null || installmentsSum > 0
+        ? (initial ?? 0) + installmentsSum
+        : null;
+
+      assign("paidAmountMinor", totalPaid);
+      set.paymentStatus = derivePaymentStatus(total, totalPaid);
     }
 
     if (derivesStatus) {
@@ -328,4 +329,88 @@ export async function todoStatusCounts(
   ]);
 
   return Object.fromEntries(rows.map((row) => [row._id, row.count]));
+}
+
+/**
+ * Adds an installment payment against a task.
+ * Updates total paid, calculates due amount, updates payment status, and returns the updated task.
+ */
+export async function addInstallment(
+  userId: string,
+  todoId: string,
+  input: InstallmentInput
+): Promise<TodoDTO> {
+  const task = await Todo.findOne({ _id: todoId, userId });
+  if (!task) throw new NotFoundError("Task not found");
+
+  const initialMinor =
+    task.initialPaymentMinor ??
+    (task.installments && task.installments.length > 0 ? 0 : task.paidAmountMinor) ??
+    0;
+
+  const installment = {
+    amountMinor: input.amount,
+    date: input.date ?? new Date(),
+    paymentMethod: input.paymentMethod ?? "cash",
+    note: input.note,
+    createdAt: new Date(),
+  };
+
+  task.installments.push(installment as any);
+  if (task.initialPaymentMinor === undefined && initialMinor > 0) {
+    task.initialPaymentMinor = initialMinor;
+  }
+
+  const installmentsSum = task.installments.reduce((sum, inst) => sum + inst.amountMinor, 0);
+  const totalPaid = initialMinor + installmentsSum;
+
+  task.paidAmountMinor = totalPaid;
+  task.paymentStatus = derivePaymentStatus(task.paymentAmountMinor, totalPaid);
+
+  await task.save();
+  return toTodoDTO(task);
+}
+
+/**
+ * Removes an installment payment from a task.
+ * Recalculates total paid, due amount, updates payment status, and returns the updated task.
+ */
+export async function deleteInstallment(
+  userId: string,
+  todoId: string,
+  installmentId: string
+): Promise<TodoDTO> {
+  const task = await Todo.findOne({ _id: todoId, userId });
+  if (!task) throw new NotFoundError("Task not found");
+
+  const index = task.installments.findIndex((inst) => inst._id?.toString() === installmentId);
+  if (index === -1) throw new NotFoundError("Installment not found");
+
+  task.installments.splice(index, 1);
+
+  const initialMinor = task.initialPaymentMinor ?? 0;
+  const installmentsSum = task.installments.reduce((sum, inst) => sum + inst.amountMinor, 0);
+  const totalPaid = initialMinor + installmentsSum;
+
+  task.paidAmountMinor = totalPaid;
+  task.paymentStatus = derivePaymentStatus(task.paymentAmountMinor, totalPaid);
+
+  await task.save();
+  return toTodoDTO(task);
+}
+
+/**
+ * Updates task payment settings (total cost, initial payment, currency, payment method).
+ */
+export async function updatePayment(
+  userId: string,
+  todoId: string,
+  input: UpdatePaymentInput
+): Promise<TodoDTO> {
+  const patch: UpdateTodoInput = {};
+  if (input.paymentAmount !== undefined) patch.paymentAmount = input.paymentAmount;
+  if (input.initialPayment !== undefined) patch.initialPayment = input.initialPayment;
+  if (input.paymentCurrency !== undefined) patch.paymentCurrency = input.paymentCurrency;
+  if (input.paymentMethod !== undefined) patch.paymentMethod = input.paymentMethod;
+  return updateTodo(userId, todoId, patch);
 }

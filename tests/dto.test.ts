@@ -178,6 +178,64 @@ describe("toTodoDTO", () => {
     expect(dto.dueAmountMinor).toBe(5000);
   });
 
+  test("serializes installments and computes total paid and due amount", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 10_000_00, // ৳10,000
+      initialPaymentMinor: 2_000_00, // ৳2,000 initial
+      installments: [
+        {
+          _id: "inst_1",
+          amountMinor: 3_000_00, // ৳3,000
+          date: new Date("2026-02-01T10:00:00Z"),
+          paymentMethod: "bkash",
+          note: "Installment 1",
+          createdAt: new Date("2026-02-01T10:00:00Z"),
+        },
+        {
+          _id: "inst_2",
+          amountMinor: 5_000_00, // ৳5,000
+          date: new Date("2026-02-15T12:00:00Z"),
+          paymentMethod: "cash",
+          note: "Final installment",
+          createdAt: new Date("2026-02-15T12:00:00Z"),
+        },
+      ],
+    });
+
+    expect(dto.initialPaymentMinor).toBe(2_000_00);
+    expect(dto.installments).toHaveLength(2);
+    expect(dto.installments[0].amountMinor).toBe(3_000_00);
+    expect(dto.installments[0].paymentMethod).toBe("bkash");
+    expect(dto.installments[0].note).toBe("Installment 1");
+    expect(dto.installments[1].amountMinor).toBe(5_000_00);
+    // Total paid = 2,000 + 3,000 + 5,000 = 10,000
+    expect(dto.paidAmountMinor).toBe(10_000_00);
+    expect(dto.dueAmountMinor).toBe(0);
+    expect(dto.paymentStatus).toBe("paid");
+  });
+
+  test("derives partial status when installments do not cover total cost", () => {
+    const dto = toTodoDTO({
+      ...base,
+      paymentAmountMinor: 10_000_00,
+      initialPaymentMinor: 2_000_00,
+      installments: [
+        {
+          _id: "inst_1",
+          amountMinor: 3_000_00,
+          date: new Date("2026-02-01T10:00:00Z"),
+          paymentMethod: "cash",
+          createdAt: new Date("2026-02-01T10:00:00Z"),
+        },
+      ],
+    });
+
+    expect(dto.paidAmountMinor).toBe(5_000_00);
+    expect(dto.dueAmountMinor).toBe(5_000_00);
+    expect(dto.paymentStatus).toBe("partial");
+  });
+
   /*
    * Rows predating the paid column carry only a total and a hand-set status.
    * Reading them back has to agree with what the user meant, or opening an old

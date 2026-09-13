@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
-  createTodoSchema, imageUrl, subtaskParams, subtaskPatchSchema,
-  taskServiceList, TASK_SERVICES, todoListQuerySchema, updateTodoSchema,
+  createTodoSchema, imageUrl, installmentInputSchema, installmentParams, subtaskParams, subtaskPatchSchema,
+  taskServiceList, TASK_SERVICES, todoListQuerySchema, updatePaymentSchema, updateTodoSchema,
 } from "@/lib/schemas/todo";
-import { createEntrySchema, createPersonSchema } from "@/lib/schemas/ledger";
+import {
+  createEntrySchema, createPersonSchema, quickEntrySchema,
+} from "@/lib/schemas/ledger";
 import { createAccountSchema, createTxSchema } from "@/lib/schemas/wallet";
 import { registerSchema, resetPasswordSchema } from "@/lib/schemas/auth";
 import { positiveAmount } from "@/lib/schemas/common";
@@ -55,6 +57,13 @@ describe("createTodoSchema", () => {
 
   test("rejects an empty or whitespace-only title", () => {
     expect(createTodoSchema.safeParse({ title: "   " }).success).toBe(false);
+  });
+
+  test("accepts canceled status", () => {
+    const parsed = createTodoSchema.parse({ title: "Ship it", status: "canceled" });
+    expect(parsed.status).toBe("canceled");
+    const updated = updateTodoSchema.parse({ status: "canceled" });
+    expect(updated.status).toBe("canceled");
   });
 
   test("converts the payment amount to minor units", () => {
@@ -393,6 +402,63 @@ describe("ledger schemas", () => {
     expect(parsed.date).toBeInstanceOf(Date);
   });
 
+  test("quickEntrySchema accepts an entry naming an existing person by id", () => {
+    const parsed = quickEntrySchema.parse({
+      type: "receivable",
+      amount: "120.50",
+      personId: "507f1f77bcf86cd799439011",
+    });
+    expect(parsed.amount).toBe(12050);
+    expect(parsed.personId).toBe("507f1f77bcf86cd799439011");
+  });
+
+  test("quickEntrySchema accepts an entry naming a person who is not in the book", () => {
+    const parsed = quickEntrySchema.parse({
+      type: "payable",
+      amount: 40,
+      personName: "  Rahim  ",
+    });
+    // Trimmed by `requiredText`; the service collapses inner runs before it
+    // matches or writes, so both halves agree on what the name is.
+    expect(parsed.personName).toBe("Rahim");
+  });
+
+  test("quickEntrySchema rejects a body carrying both a person and a name", () => {
+    /* Two answers to "who" would leave the server picking a winner, and that
+       is exactly the case where the money lands on the wrong person. */
+    expect(
+      quickEntrySchema.safeParse({
+        type: "receivable",
+        amount: 10,
+        personId: "507f1f77bcf86cd799439011",
+        personName: "Rahim",
+      }).success
+    ).toBe(false);
+  });
+
+  test("quickEntrySchema rejects a body naming nobody at all", () => {
+    expect(quickEntrySchema.safeParse({ type: "receivable", amount: 10 }).success)
+      .toBe(false);
+  });
+
+  test("quickEntrySchema rejects a blank name, which would create a nameless row", () => {
+    expect(
+      quickEntrySchema.safeParse({ type: "receivable", amount: 10, personName: "   " }).success
+    ).toBe(false);
+  });
+
+  test("quickEntrySchema rejects a malformed person id", () => {
+    expect(
+      quickEntrySchema.safeParse({ type: "receivable", amount: 10, personId: "nope" }).success
+    ).toBe(false);
+  });
+
+  test("quickEntrySchema keeps the amount rules it inherits", () => {
+    expect(
+      quickEntrySchema.safeParse({ type: "receivable", amount: 0, personName: "Rahim" }).success
+    ).toBe(false);
+  });
+
   test("createEntrySchema rejects an unparseable date", () => {
     expect(
       createEntrySchema.safeParse({ type: "receivable", amount: 1, date: "yesterday" }).success
@@ -446,5 +512,71 @@ describe("auth schemas", () => {
     expect(resetPasswordSchema.safeParse({ ...base, code: "12345" }).success).toBe(false);
     expect(resetPasswordSchema.safeParse({ ...base, code: "abcdef" }).success).toBe(false);
     expect(resetPasswordSchema.safeParse({ ...base, code: "123456" }).success).toBe(true);
+  });
+});
+
+describe("installment and payment schemas", () => {
+  test("installmentInputSchema parses major units into minor units", () => {
+    const parsed = installmentInputSchema.parse({
+      amount: "2500.50",
+      date: "2026-03-01",
+      paymentMethod: "bkash",
+      note: "Second installment",
+    });
+
+    expect(parsed.amount).toBe(250050);
+    expect(parsed.paymentMethod).toBe("bkash");
+    expect(parsed.note).toBe("Second installment");
+    expect(parsed.date).toBeInstanceOf(Date);
+  });
+
+  test("installmentInputSchema rejects zero or negative amounts", () => {
+    expect(installmentInputSchema.safeParse({ amount: 0 }).success).toBe(false);
+    expect(installmentInputSchema.safeParse({ amount: -100 }).success).toBe(false);
+  });
+
+  test("installmentParams validates objectId and installmentId", () => {
+    expect(
+      installmentParams.safeParse({
+        id: "507f1f77bcf86cd799439011",
+        installmentId: "inst_123",
+      }).success
+    ).toBe(true);
+
+    expect(
+      installmentParams.safeParse({
+        id: "invalid_id",
+        installmentId: "inst_123",
+      }).success
+    ).toBe(false);
+  });
+
+  test("updatePaymentSchema validates payment details", () => {
+    const parsed = updatePaymentSchema.parse({
+      paymentAmount: "15000",
+      initialPayment: "3000",
+      paymentCurrency: "bdt",
+      paymentMethod: "bank",
+    });
+
+    expect(parsed.paymentAmount).toBe(1500000);
+    expect(parsed.initialPayment).toBe(300000);
+    expect(parsed.paymentCurrency).toBe("BDT");
+    expect(parsed.paymentMethod).toBe("bank");
+  });
+
+  test("updatePaymentSchema rejects an empty update payload", () => {
+    expect(updatePaymentSchema.safeParse({}).success).toBe(false);
+  });
+
+  test("createTodoSchema accepts initialPayment alongside paymentAmount", () => {
+    const parsed = createTodoSchema.parse({
+      title: "New Passport",
+      paymentAmount: 8500,
+      initialPayment: 2000,
+    });
+
+    expect(parsed.paymentAmount).toBe(850000);
+    expect(parsed.initialPayment).toBe(200000);
   });
 });

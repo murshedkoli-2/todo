@@ -43,13 +43,14 @@ const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TITLE_LENGTH = 200;
 
-const STATUS_OPTIONS: TodoStatus[] = ["todo", "in_progress", "completed"];
+const STATUS_OPTIONS: TodoStatus[] = ["todo", "in_progress", "completed", "canceled"];
 const CURRENCIES = ["BDT", "USD", "EUR", "GBP", "INR", "AED", "SAR"];
 
 const STATUS_COPY: Record<TodoStatus, string> = {
   todo: "Queued up, not started yet",
   in_progress: "Being worked on right now",
   completed: "Finished — nothing left to do",
+  canceled: "Discarded or called off",
 };
 
 /**
@@ -95,9 +96,11 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
       : ""
   );
   const [paidAmount, setPaidAmount]         = useState(
-    todo?.paidAmountMinor != null
-      ? String(fromMinor(todo.paidAmountMinor, todo.paymentCurrency))
-      : ""
+    todo?.initialPaymentMinor != null
+      ? String(fromMinor(todo.initialPaymentMinor, todo.paymentCurrency))
+      : todo?.paidAmountMinor != null
+        ? String(fromMinor(todo.paidAmountMinor, todo.paymentCurrency))
+        : ""
   );
   const [paymentCurrency, setPaymentCurrency] = useState(todo?.paymentCurrency ?? "BDT");
   const [paymentMethod, setPaymentMethod]   = useState<PaymentMethod>(
@@ -300,6 +303,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
         // Sent in major units; the schema converts to integer minor units.
         // `paymentStatus` is not sent: the service derives it from these two.
         paymentAmount: paymentAmount !== "" ? paymentAmount : null,
+        initialPayment: paidAmount !== "" ? paidAmount : null,
         paidAmount: paidAmount !== "" ? paidAmount : null,
         paymentCurrency,
         paymentMethod,
@@ -438,7 +442,13 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                             copy={STATUS_COPY[option]}
                             icon={<BoltIcon className="w-4 h-4" />}
                             color={STATUS_COLORS[option]}
-                            onColor={option === "completed" ? "var(--on-green)" : "var(--on-accent)"}
+                            onColor={
+                              option === "completed"
+                                ? "var(--on-green)"
+                                : option === "canceled"
+                                  ? "var(--text-secondary)"
+                                  : "var(--on-accent)"
+                            }
                           />
                         ))}
                       </div>
@@ -535,7 +545,7 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
 
                     <div>
                       <label htmlFor="task-paid-amount" className="field-label">
-                        Paid so far <span className="font-normal text-ink-muted">(optional)</span>
+                        Initial payment (advance) <span className="font-normal text-ink-muted">(optional)</span>
                       </label>
                       <input
                         id="task-paid-amount"
@@ -548,6 +558,9 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                         className="input-dark"
                         aria-describedby="payment-summary"
                       />
+                      <p className="text-xs text-ink-muted mt-1.5">
+                        Amount received at start. Additional installments can be recorded anytime after creation.
+                      </p>
                     </div>
 
                     <div>
@@ -857,6 +870,18 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                             ""
                           ),
                         empty: totalMinor == null,
+                        stepIndex: 3,
+                      },
+                      {
+                        key: "initial-payment",
+                        label: "Initial payment",
+                        value:
+                          paidMinor != null && paidMinor > 0 ? (
+                            <Money minor={paidMinor} currency={paymentCurrency} size="sm" tone="neutral" />
+                          ) : (
+                            ""
+                          ),
+                        empty: paidMinor == null || paidMinor === 0,
                         stepIndex: 3,
                       },
                       {

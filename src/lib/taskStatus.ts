@@ -64,6 +64,8 @@ export function deriveStatusFromSubtasks(
   subtasks: readonly TaskSubtask[],
   currentStatus: TodoStatus
 ): TodoStatus | null {
+  if (currentStatus === "canceled") return null;
+
   const { done, started, total } = subtaskProgress(subtasks);
   if (total === 0) return null;
 

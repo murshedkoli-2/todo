@@ -1,12 +1,13 @@
 import { z } from "zod";
 import {
-  currencyCode, dateInput, nonNegativeAmount, objectId, optionalText, requiredText,
+  currencyCode, dateInput, nonNegativeAmount, objectId, optionalText, positiveAmount, requiredText,
 } from "@/lib/schemas/common";
 import {
   MAX_FIELD_LENGTH, SERVICE_FIELDS, TASK_SERVICES as SERVICE_CATALOGUE,
 } from "@/lib/serviceCatalogue";
 
-export const TODO_STATUSES = ["todo", "in_progress", "completed"] as const;
+export const TODO_STATUSES = ["todo", "in_progress", "completed", "canceled"] as const;
+export const SUBTASK_STATUSES = ["todo", "in_progress", "completed"] as const;
 export const PAYMENT_STATUSES = ["unpaid", "partial", "paid"] as const;
 
 /**
@@ -39,12 +40,14 @@ export { TASK_SERVICES } from "@/lib/serviceCatalogue";
 export type { TaskService } from "@/lib/serviceCatalogue";
 
 export const todoStatusSchema = z.enum(TODO_STATUSES);
+export const subtaskStatusSchema = z.enum(SUBTASK_STATUSES);
 export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
 export const todoPrioritySchema = z.enum(TODO_PRIORITIES);
 export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
 export const taskServiceSchema = z.enum(SERVICE_CATALOGUE);
 
 export type TodoStatus = z.infer<typeof todoStatusSchema>;
+export type SubtaskStatus = z.infer<typeof subtaskStatusSchema>;
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 export type TodoPriority = z.infer<typeof todoPrioritySchema>;
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
@@ -105,7 +108,7 @@ const subtaskFieldMap = z
 export const subtaskSchema = z
   .object({
     service: taskServiceSchema,
-    status: todoStatusSchema.default("todo"),
+    status: subtaskStatusSchema.default("todo"),
     /** @deprecated Send `status`. Read only when `status` is absent. */
     done: z.boolean().optional(),
     fields: subtaskFieldMap.default({}),
@@ -170,11 +173,13 @@ export const createTodoSchema = z.object({
   /* The job's total cost. Named `paymentAmount` because that is what the field
      has always held — every existing row's amount is a price, not a receipt. */
   paymentAmount: nonNegativeAmount.nullish(),
-  /* What has been received against that total. */
+  /* Initial payment / advance made towards the task. */
+  initialPayment: nonNegativeAmount.nullish(),
+  /* What has been received against that total (legacy alias for initialPayment). */
   paidAmount: nonNegativeAmount.nullish(),
   paymentCurrency: currencyCode.default("BDT"),
   paymentMethod: paymentMethodSchema.default("unset"),
-  /* Derived from the two amounts by the service; accepted here only so an
+  /* Derived from the amounts by the service; accepted here only so an
      existing API caller that still sends it is not rejected. */
   paymentStatus: paymentStatusSchema.default("unpaid"),
 });
@@ -195,6 +200,7 @@ export const updateTodoSchema = z
     images: imageUrlList,
     featureImage: imageUrl.nullable(),
     paymentAmount: nonNegativeAmount.nullable(),
+    initialPayment: nonNegativeAmount.nullable(),
     paidAmount: nonNegativeAmount.nullable(),
     paymentCurrency: currencyCode,
     paymentMethod: paymentMethodSchema,
@@ -203,6 +209,31 @@ export const updateTodoSchema = z
   .partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0, { message: "Nothing to update" });
+
+export const installmentInputSchema = z.object({
+  amount: positiveAmount,
+  date: dateInput.optional(),
+  paymentMethod: paymentMethodSchema.default("cash"),
+  note: optionalText(200),
+});
+
+export type InstallmentInput = z.infer<typeof installmentInputSchema>;
+
+export const installmentParams = z.object({
+  id: objectId,
+  installmentId: z.string().trim().min(1, "Invalid installment ID"),
+});
+
+export const updatePaymentSchema = z
+  .object({
+    paymentAmount: nonNegativeAmount.nullable().optional(),
+    initialPayment: nonNegativeAmount.nullable().optional(),
+    paymentCurrency: currencyCode.optional(),
+    paymentMethod: paymentMethodSchema.optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: "Nothing to update" });
+
+export type UpdatePaymentInput = z.infer<typeof updatePaymentSchema>;
 
 /**
  * A change to one sub-task, addressed by its service in the URL.

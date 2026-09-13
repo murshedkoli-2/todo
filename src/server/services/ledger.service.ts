@@ -8,8 +8,11 @@ import {
   type LedgerPersonDTO, type LedgerPersonWithBalanceDTO, type PersonTotals,
 } from "@/lib/dto/ledger";
 import { NotFoundError } from "@/lib/api/errors";
+import { tidyPersonName } from "@/lib/ledgerPeople";
 import { withTransaction } from "@/server/withTransaction";
-import type { CreateEntryInput, CreatePersonInput, UpdatePersonInput } from "@/lib/schemas/ledger";
+import type {
+  CreateEntryInput, CreatePersonInput, QuickEntryInput, UpdatePersonInput,
+} from "@/lib/schemas/ledger";
 
 interface TotalsRow {
   _id: Types.ObjectId;
@@ -29,14 +32,22 @@ interface TotalsRow {
  * `$ifNull` reads the pre-migration float column when the minor-unit field is
  * absent, multiplying by 100 so both generations of document sum in the same
  * unit. Once `scripts/migrate-money.mjs` has run, the fallback branch is dead.
+ *
+ * `personId` narrows the same pipeline to one counterparty, for the writes that
+ * need to hand back a single settled row. Sharing the pipeline rather than
+ * summing that one person a second way is what keeps a balance returned from a
+ * write equal to the balance the list reports on the next load.
  */
-async function personTotals(userId: Types.ObjectId): Promise<Map<string, PersonTotals>> {
+async function personTotals(
+  userId: Types.ObjectId,
+  personId?: Types.ObjectId
+): Promise<Map<string, PersonTotals>> {
   const amountMinor = {
     $ifNull: ["$amountMinor", { $round: [{ $multiply: [{ $ifNull: ["$amount", 0] }, 100] }, 0] }],
   };
 
   const rows = await LedgerEntry.aggregate<TotalsRow>([
-    { $match: { userId } },
+    { $match: personId ? { userId, personId } : { userId } },
     {
       $group: {
         _id: "$personId",
@@ -231,6 +242,85 @@ export async function createEntry(
   });
 
   return toEntryDTO(entry);
+}
+
+/**
+ * Adds an entry and, when the counterparty is new, the counterparty with it.
+ *
+ * This is the write behind the ledger page's quick add. Doing it in one call
+ * rather than "create the person, then post the entry" is not a round-trip
+ * optimisation: the two-call version fails between its halves often enough to
+ * matter — a dropped connection after the first leaves a person in the book
+ * with no entries and no balance, which reads as a mistake the user has to
+ * clean up rather than as a save that did not happen.
+ *
+ * A typed name that already belongs to somebody attaches to them instead of
+ * creating a second row. Matching is case-insensitive through a collation
+ * rather than a regex, so no user input reaches a pattern; the client applies
+ * the same rule through `findPersonByName` and says which person the entry is
+ * about to land on, so this is a backstop for a fast typist, not a surprise.
+ *
+ * Returns the person with their settled balance, because the caller is a list
+ * that has just changed by this amount and would otherwise have to refetch the
+ * whole book to redraw one row.
+ */
+export async function createQuickEntry(
+  userId: string,
+  input: QuickEntryInput
+): Promise<{
+  person: LedgerPersonWithBalanceDTO;
+  entry: LedgerEntryDTO;
+  /** True when this write is what put the person in the book. */
+  personCreated: boolean;
+}> {
+  const owner = new Types.ObjectId(userId);
+
+  const { person, entry, personCreated } = await withTransaction(async (session) => {
+    /* Either half can fail — a stale id from a list loaded before a delete, or
+       the create — and neither may leave the other behind, which is the whole
+       reason this is one transaction rather than two writes. */
+    const existing = input.personId
+      ? await Ledger.findOne({ _id: input.personId, userId: owner }).session(session ?? null)
+      : await Ledger.findOne({ userId: owner, name: tidyPersonName(input.personName!) })
+          .collation({ locale: "en", strength: 2 })
+          .session(session ?? null);
+
+    if (!existing && input.personId) throw new NotFoundError("Person not found");
+
+    const [created] = existing
+      ? [existing]
+      : await Ledger.create(
+          [{ userId: owner, name: tidyPersonName(input.personName!) }],
+          { session, ordered: true }
+        );
+
+    const [written] = await LedgerEntry.create(
+      [
+        {
+          userId: owner,
+          personId: created!._id,
+          type: input.type,
+          amountMinor: input.amount,
+          note: input.note,
+          date: input.date ?? new Date(),
+        },
+      ],
+      { session, ordered: true }
+    );
+
+    return { person: created!, entry: written!, personCreated: !existing };
+  });
+
+  /* Read back outside the transaction: the totals are a consequence of the
+     write, not part of it, and re-reading them is what makes the row handed to
+     the client agree with the one the next page load will show. */
+  const totals = await personTotals(owner, person._id as Types.ObjectId);
+
+  return {
+    person: toPersonWithBalanceDTO(person, totals.get(person._id.toString()) ?? EMPTY_TOTALS),
+    entry: toEntryDTO(entry),
+    personCreated,
+  };
 }
 
 export async function deleteEntry(

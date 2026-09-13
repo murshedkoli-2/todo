@@ -24,7 +24,7 @@ export type {
 export type { EntryType } from "@/lib/schemas/ledger";
 export type { AccountType, TxType } from "@/lib/schemas/wallet";
 
-export type { TodoDTO as Todo } from "@/lib/dto/todo";
+export type { TaskInstallmentDTO as TaskInstallment, TodoDTO as Todo } from "@/lib/dto/todo";
 export type {
   LedgerPersonDTO as LedgerPerson,
   LedgerEntryDTO as LedgerEntry,
@@ -39,9 +39,9 @@ export type {
 
 import { isPastDue } from "@/lib/dueDate";
 import type { TodoDTO } from "@/lib/dto/todo";
-import { TASK_SERVICES as SERVICE_CATALOGUE, TODO_STATUSES } from "@/lib/schemas/todo";
+import { TASK_SERVICES as SERVICE_CATALOGUE, TODO_STATUSES, SUBTASK_STATUSES } from "@/lib/schemas/todo";
 import type {
-  PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus,
+  PaymentMethod, PaymentStatus, SubtaskStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
 import type { AccountType } from "@/lib/schemas/wallet";
 
@@ -61,6 +61,7 @@ export interface PaginationInfo {
  * first second of the day. See `lib/dueDate.ts`.
  */
 export function getDisplayStatus(todo: TodoDTO): DisplayStatus {
+  if (todo.status === "canceled") return "canceled";
   if (todo.status === "completed") return "completed";
   if (todo.dueDate && isPastDue(todo.dueDate)) return "overdue";
   return todo.status;
@@ -70,27 +71,24 @@ export const STATUS_LABELS: Record<DisplayStatus, string> = {
   todo: "To Do",
   in_progress: "In Progress",
   completed: "Completed",
+  canceled: "Canceled",
   overdue: "Overdue",
 };
 
-/** The three real, settable statuses — `overdue` is excluded by construction. */
-export const BOARD_COLUMNS: TodoStatus[] = ["todo", "in_progress", "completed"];
+/** The four real, settable statuses — `overdue` is excluded by construction. */
+export const BOARD_COLUMNS: TodoStatus[] = ["todo", "in_progress", "completed", "canceled"];
 
 /**
  * What a sub-task can be set to, least to most finished — the order the
  * segmented control renders, so left-to-right is progress.
- *
- * Taken from the schema's enum rather than written out again: a sub-task's
- * status is the task's status, and the point of sharing the vocabulary is lost
- * the moment there are two lists of it to keep in step.
  */
-export const SUBTASK_STATUS_CHOICES: readonly TodoStatus[] = TODO_STATUSES;
+export const SUBTASK_STATUS_CHOICES: readonly SubtaskStatus[] = SUBTASK_STATUSES;
 
 /**
  * Compact status wording for a checklist row, where {@link STATUS_LABELS} is
  * two words wide and sits three abreast next to a service name.
  */
-export const SUBTASK_STATUS_SHORT_LABELS: Record<TodoStatus, string> = {
+export const SUBTASK_STATUS_SHORT_LABELS: Record<SubtaskStatus, string> = {
   todo: "To do",
   in_progress: "Doing",
   completed: "Done",
@@ -295,6 +293,7 @@ export const STATUS_COLORS: Record<DisplayStatus, string> = {
   todo: "var(--accent)",
   in_progress: "var(--yellow)",
   completed: "var(--green)",
+  canceled: "var(--text-muted)",
   overdue: "var(--red)",
 };
 
@@ -306,6 +305,7 @@ export const STATUS_TEXT_COLORS: Record<DisplayStatus, string> = {
   todo: "var(--accent-ink)",
   in_progress: "var(--yellow-ink)",
   completed: "var(--green-ink)",
+  canceled: "var(--text-secondary)",
   overdue: "var(--red-ink)",
 };
 

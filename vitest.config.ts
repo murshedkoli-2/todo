@@ -42,6 +42,8 @@ export default defineConfig({
         "src/lib/serviceCatalogue.ts",
         "src/lib/subtasks.ts",
         "src/lib/taskStatus.ts",
+        "src/lib/ledgerPeople.ts",
+        "src/lib/ledgerBalance.ts",
         "src/lib/requestOrigin.ts",
       ],
       thresholds: {

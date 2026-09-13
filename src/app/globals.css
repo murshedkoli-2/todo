@@ -167,6 +167,17 @@
   --elevation-raised:   var(--shadow-card);
   --elevation-floating: var(--shadow-popup);
 
+  /*
+   * A one-pixel inner highlight along the top of a raised surface.
+   *
+   * Real light falls on the top edge of a lifted object; a shadow alone gives
+   * the underside without the catch-light, which is why flat-designed cards
+   * read as printed rectangles rather than as objects. Pale enough to be felt
+   * rather than seen — the moment it is legible as a line, it looks like a
+   * border that lost its bottom half.
+   */
+  --surface-highlight: inset 0 1px 0 rgba(255,255,255,0.75);
+
   /* Hairline used to rule flat lists. */
   --rule: 1px solid var(--border);
 }
@@ -184,6 +195,10 @@ html:not(.light) {
   --border:          rgba(255,255,255,0.08);
   --border-hover:    rgba(255,255,255,0.17);
   --border-focus:    rgba(139,147,255,0.65);
+
+  /* Dark surfaces catch far less light, and a bright edge on one reads as a
+     seam. Enough to separate a card from the canvas behind it, no more. */
+  --surface-highlight: inset 0 1px 0 rgba(255,255,255,0.055);
 
   --text-primary:    #eaecfb;
   --text-secondary:  #a0a7ce;
@@ -361,11 +376,26 @@ button, a, [role="button"] {
   font-weight: 650;
   white-space: nowrap;
 }
+/*
+ * The hero figure is sized by the box it sits in, not by the window.
+ *
+ * A viewport-sized clamp asks the wrong question: the same ৳152,580.50 that
+ * fits a full-width panel overflows a quarter-width summary card at the very
+ * same window size, and `white-space: nowrap` turns that into a figure sheared
+ * off at the card's edge — the one number on the page nobody can afford to
+ * misread. `cqi` measures the panel instead.
+ *
+ * The clamp is also the fallback: outside a container `cqi` resolves against
+ * the small viewport, and 13 of those always exceeds the maximum, so an
+ * uncontained hero simply lands on the old ceiling rather than on something
+ * absurd.
+ */
 .money-hero {
-  font-size: clamp(2rem, 1.5rem + 2.4vw, 3.25rem);
+  font-size: clamp(1.75rem, 13cqi, 3.25rem);
   font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1;
+  max-width: 100%;
 }
 .money-lg  { font-size: 1.375rem; letter-spacing: -0.025em; }
 .money-md  { font-size: 1rem; }
@@ -412,6 +442,37 @@ button, a, [role="button"] {
   padding: 0.625rem 1.25rem;
   background: var(--bg-sunken);
   border-bottom: var(--rule);
+}
+
+/* ── Page toolbar ───────────────────────────────────────────────────────
+   The title, search, and primary action of a page, pinned under the app
+   header so a list of sixty rows never scrolls its own controls away. It sits
+   on a frosted wash rather than an opaque bar: the content sliding under it
+   stays legible as motion, which is what tells the reader the page moved and
+   the chrome did not.
+
+   The hairline and the lift arrive only once it is actually stuck, so an
+   unscrolled page shows no rule floating across it. */
+.page-toolbar {
+  position: sticky;
+  top: 4rem;                 /* the app header's own height */
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg-content) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.page-toolbar[data-stuck="true"] {
+  border-bottom-color: var(--border);
+  box-shadow: 0 10px 24px -22px rgba(17,19,44,0.55);
+}
+/*
+ * Browsers without backdrop-filter would show the page scrolling straight
+ * through the toolbar, so those get an opaque bar instead of a see-through one.
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .page-toolbar { background: var(--bg-content); }
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -551,7 +612,7 @@ html:not(.light) .input-dark[type="date"] { color-scheme: dark; }
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), var(--surface-highlight);
 }
 
 /* Interactive grid card — the core object from the reference */
@@ -565,21 +626,43 @@ html:not(.light) .input-dark[type="date"] { color-scheme: dark; }
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), var(--surface-highlight);
   transition: transform 180ms cubic-bezier(0.16,1,0.3,1), box-shadow 180ms ease, border-color 160ms ease;
 }
 .card-tile:hover {
   transform: translateY(-3px);
   border-color: var(--border-hover);
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: var(--shadow-card-hover), var(--surface-highlight);
 }
 .card-tile:active { transform: translateY(-1px); }
+
+/*
+ * The headline card in a row of statistics. Carries the same soft brand wash
+ * and gradient hairline as `.panel-hero` — the two are the same idea at two
+ * scales, and a page should only ever hold one of them.
+ */
+.card-tile.is-feature {
+  position: relative;
+  overflow: hidden;
+  container-type: inline-size;
+  background-image: var(--brand-gradient-soft);
+}
+.card-tile.is-feature::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--brand-gradient);
+  opacity: 0.8;
+}
 
 .panel {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  box-shadow: var(--elevation-raised);
+  box-shadow: var(--elevation-raised), var(--surface-highlight);
   padding: 1.5rem;
 }
 
@@ -591,11 +674,13 @@ html:not(.light) .input-dark[type="date"] { color-scheme: dark; }
 .panel-hero {
   position: relative;
   overflow: hidden;
+  /* Sizes the figure inside it — see `.money-hero`. */
+  container-type: inline-size;
   background: var(--bg-card);
   background-image: var(--brand-gradient-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  box-shadow: var(--elevation-raised);
+  box-shadow: var(--elevation-raised), var(--surface-highlight);
 }
 /* A hairline of the full brand gradient along the top edge, so the hero panel
    is tied to the primary action without repeating a saturated fill. */

@@ -5,10 +5,14 @@ import {
   LedgerPersonWithBalance, LedgerEntryWithBalance, EntryType,
 } from "@/lib/types";
 import { api, errorMessage } from "@/lib/apiClient";
+import { formatMoney } from "@/lib/money";
+import { personSettlement, settlementLabel } from "@/lib/ledgerBalance";
 import Modal from "@/components/ui/Modal";
+import ProgressBar from "@/components/ui/ProgressBar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Money from "@/components/ui/Money";
-import TransactionWizard, { DirectionChoice, TransactionDraft } from "@/components/TransactionWizard";
+import TransactionWizard, { TransactionDraft } from "@/components/TransactionWizard";
+import { ENTRY_DIRECTIONS } from "@/components/ledger/entryDirections";
 import Sparkline from "@/components/ui/Sparkline";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
@@ -21,27 +25,6 @@ interface PersonDetailModalProps {
   onPersonUpdate: (updated: LedgerPersonWithBalance) => void;
   onPersonDelete: (id: string) => void;
 }
-
-const ENTRY_DIRECTIONS: ReadonlyArray<DirectionChoice<EntryType>> = [
-  {
-    value: "receivable",
-    label: "They owe me",
-    copy: "Money you lent or are owed",
-    color: "var(--green)",
-    onColor: "var(--on-green)",
-    icon: <ArrowUpIcon className="w-4 h-4" />,
-    sign: 1,
-  },
-  {
-    value: "payable",
-    label: "I owe them",
-    copy: "Money you borrowed or must pay",
-    color: "var(--red)",
-    onColor: "var(--on-red)",
-    icon: <ArrowDownIcon className="w-4 h-4" />,
-    sign: -1,
-  },
-];
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-GB", {
@@ -163,6 +146,14 @@ export default function PersonDetailModal({
     }
   };
 
+  /* The same two totals read as a debt being paid down — see
+     `lib/ledgerBalance.ts`. Derived here rather than stored, so it cannot
+     disagree with the history rendered underneath it. */
+  const settlement = personSettlement({
+    totalReceivableMinor: totals.receivable,
+    totalPayableMinor: totals.payable,
+  });
+
   // Balance over time, oldest first — `entries` already arrives chronological.
   const balanceHistory = useMemo(
     () => entries.map((entry) => entry.runningBalanceMinor),
@@ -191,10 +182,14 @@ export default function PersonDetailModal({
         <div className="px-5 sm:px-6 py-4 flex-shrink-0 border-b border-line">
           <div className="flex items-end justify-between gap-4 mb-4">
             <div className="min-w-0">
-              <p className="text-eyebrow mb-1">Net balance</p>
+              {/* "Outstanding" rather than "Net balance": the figure has not
+                  changed, but what a person wants from it is how much of the
+                  loan is still out, and the old label answered a bookkeeping
+                  question nobody was asking. */}
+              <p className="text-eyebrow mb-1">Outstanding</p>
               <Money minor={totals.balance} size="lg" signed />
               <p className="text-xs mt-0.5 text-ink-muted">
-                {totals.balance >= 0 ? "They owe you" : "You owe them"}
+                {settlementLabel(settlement.side)}
               </p>
             </div>
             <Sparkline
@@ -205,16 +200,74 @@ export default function PersonDetailModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="well px-3 py-2.5">
-              <p className="text-[11px] font-semibold text-ink-muted">Receivable</p>
-              <Money minor={totals.receivable} size="sm" tone="positive" className="mt-0.5 block" />
-            </div>
-            <div className="well px-3 py-2.5">
-              <p className="text-[11px] font-semibold text-ink-muted">Payable</p>
-              <Money minor={totals.payable} size="sm" tone="negative" className="mt-0.5 block" />
-            </div>
-          </div>
+          {/*
+            The loan, and how far through it this person is.
+
+            Three figures rather than the two direction totals that were here
+            before: "Receivable ৳10,000 / Payable ৳5,000" is the same arithmetic
+            said in the language of the database, and it left the reader to work
+            out that half the money had come back.
+          */}
+          {settlement.untouched ? (
+            <p className="text-xs text-ink-muted">
+              Nothing recorded yet — the first transaction sets the amount.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="well px-3 py-2.5">
+                  <p className="text-[11px] font-semibold text-ink-muted">
+                    {settlement.side === "payable" ? "Borrowed" : "Lent"}
+                  </p>
+                  <Money
+                    minor={settlement.principalMinor}
+                    size="sm"
+                    tone="neutral"
+                    className="mt-0.5 block"
+                  />
+                </div>
+                <div className="well px-3 py-2.5">
+                  <p className="text-[11px] font-semibold text-ink-muted">
+                    {settlement.side === "payable" ? "Paid" : "Returned"}
+                  </p>
+                  <Money
+                    minor={settlement.paidMinor}
+                    size="sm"
+                    tone="positive"
+                    className="mt-0.5 block"
+                  />
+                </div>
+                <div className="well px-3 py-2.5">
+                  <p className="text-[11px] font-semibold text-ink-muted">Remaining</p>
+                  {/* Neutral, not red: this is a magnitude, and money still
+                      owed *to* the user is not a negative for them. Direction
+                      is carried by the signed figure above. */}
+                  <Money
+                    minor={settlement.remainingMinor}
+                    size="sm"
+                    tone={settlement.fullySettled ? "positive" : "neutral"}
+                    className="mt-0.5 block"
+                  />
+                </div>
+              </div>
+
+              <ProgressBar
+                className="mt-3"
+                value={settlement.paidRatio * 100}
+                color={settlement.fullySettled ? "var(--green)" : undefined}
+                label={`${formatMoney(settlement.paidMinor)} of ${formatMoney(
+                  settlement.principalMinor
+                )} settled`}
+              />
+              <p className="text-[11px] mt-1.5 text-ink-muted">
+                {settlement.fullySettled
+                  ? "Fully settled — every taka accounted for."
+                  : `${formatMoney(settlement.paidMinor)} of ${formatMoney(
+                      settlement.principalMinor
+                    )} settled · ${formatMoney(settlement.remainingMinor)} to go`}
+              </p>
+            </>
+          )}
         </div>
 
         {/* ── Add entry ── */}

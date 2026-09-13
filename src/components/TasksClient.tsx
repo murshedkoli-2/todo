@@ -28,15 +28,16 @@ interface TasksClientProps {
   initialTodos: Todo[];
 }
 
-type SortKey = "priority" | "newest" | "oldest" | "due" | "title";
+type SortKey = "recent" | "priority" | "due" | "newest" | "oldest" | "title";
 type ViewMode = "list" | "grid" | "board";
 
 /* Typed against the union rather than `string`, so adding an option the sort
    function cannot handle is a compile error rather than a silent no-op. */
 const SORT_OPTIONS: ReadonlyArray<SortOption & { value: SortKey }> = [
+  { value: "recent", label: "Recently added / edited" },
   { value: "priority", label: "Priority" },
   { value: "due", label: "Due date" },
-  { value: "newest", label: "Newest" },
+  { value: "newest", label: "Creation date" },
   { value: "oldest", label: "Oldest" },
   { value: "title", label: "Title" },
 ];
@@ -55,7 +56,7 @@ const isViewMode = (value: string): value is ViewMode => VIEW_MODES.includes(val
 
 /** Filter chips, in the order work moves through them. */
 const FILTERS: ReadonlyArray<"all" | DisplayStatus> = [
-  "all", "todo", "in_progress", "completed", "overdue",
+  "all", "todo", "in_progress", "completed", "canceled", "overdue",
 ];
 
 
@@ -85,12 +86,18 @@ function searchableText(todo: Todo): string {
 
 /** Sorts a copy so the source list stays untouched. */
 function sortTodos(todos: Todo[], key: SortKey): Todo[] {
+  const byRecent = (a: Todo, b: Todo) => {
+    const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+    return timeB - timeA || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  };
+
   const byNewest = (a: Todo, b: Todo) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 
   const byDue = (a: Todo, b: Todo) => {
     // Undated work sinks below anything with a deadline.
-    if (!a.dueDate && !b.dueDate) return byNewest(a, b);
+    if (!a.dueDate && !b.dueDate) return byRecent(a, b);
     if (!a.dueDate) return 1;
     if (!b.dueDate) return -1;
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
@@ -99,6 +106,8 @@ function sortTodos(todos: Todo[], key: SortKey): Todo[] {
   switch (key) {
     case "oldest":
       return [...todos].sort((a, b) => -byNewest(a, b));
+    case "newest":
+      return [...todos].sort(byNewest);
     case "title":
       return [...todos].sort((a, b) => a.title.localeCompare(b.title));
     case "due":
@@ -110,8 +119,9 @@ function sortTodos(todos: Todo[], key: SortKey): Todo[] {
       return [...todos].sort(
         (a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority] || byDue(a, b)
       );
+    case "recent":
     default:
-      return [...todos].sort(byNewest);
+      return [...todos].sort(byRecent);
   }
 }
 
@@ -125,7 +135,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   /* View and sort are preferences, not page state: they survive navigating to
      a task and back. */
   const [sortKey, setSortKey] = usePersistentState<SortKey>(
-    "taskflow:tasks:sort", "priority", isSortKey
+    "taskflow:tasks:sort", "recent", isSortKey
   );
   const [view, setView] = usePersistentState<ViewMode>(
     "taskflow:tasks:view", "list", isViewMode
@@ -153,12 +163,12 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
     const query = search.trim().toLowerCase();
     const filtered = todos.filter((todo) => {
       const status = getDisplayStatus(todo);
-      // Completed work drops out of the default view so it only shows what is
-      // still open. The Completed stat card brings it back, and an active
-      // search spans everything so finished tasks stay findable.
+      // Completed and canceled work drops out of the default view so it only shows what is
+      // still open. Filter chips bring them back, and an active
+      // search spans everything so finished and canceled tasks stay findable.
       const matchesStatus =
         statusFilter === "all"
-          ? Boolean(query) || status !== "completed"
+          ? Boolean(query) || (status !== "completed" && status !== "canceled")
           : status === statusFilter;
       const matchesSearch = !query || searchableText(todo).includes(query);
       return matchesStatus && matchesSearch;
@@ -215,7 +225,9 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           toast.toast(
             status === "completed"
               ? `“${truncate(previous.title)}” completed`
-              : `“${truncate(previous.title)}” moved to ${STATUS_LABELS[status]}`,
+              : status === "canceled"
+                ? `“${truncate(previous.title)}” canceled`
+                : `“${truncate(previous.title)}” moved to ${STATUS_LABELS[status]}`,
             "success",
             {
               label: "Undo",

@@ -36,6 +36,7 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: TodoStatus; label: string }> = [
   { value: "todo", label: "To Do" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Canceled" },
 ];
 
 /** Soft wash used behind the card's status header. */
@@ -221,7 +222,7 @@ export default function TodoCard({
                 }}
               >
                 <CalendarIcon className="w-3.5 h-3.5" />
-                {formatDueLabel(todo.dueDate, { relative: displayStatus !== "completed" })}
+                {formatDueLabel(todo.dueDate, { relative: displayStatus !== "completed" && displayStatus !== "canceled" })}
               </span>
             )}
 

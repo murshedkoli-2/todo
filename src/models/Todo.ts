@@ -1,13 +1,13 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 import { MAX_FIELD_LENGTH, TASK_SERVICES as SERVICE_CATALOGUE } from "@/lib/serviceCatalogue";
 import {
-  PAYMENT_METHODS, PAYMENT_STATUSES, TASK_SERVICES, TODO_PRIORITIES, TODO_STATUSES,
+  PAYMENT_METHODS, PAYMENT_STATUSES, SUBTASK_STATUSES, TASK_SERVICES, TODO_PRIORITIES, TODO_STATUSES,
 } from "@/lib/schemas/todo";
 import type {
-  PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus,
+  PaymentMethod, PaymentStatus, SubtaskStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
 
-export type { PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatus };
+export type { PaymentMethod, PaymentStatus, SubtaskStatus, TaskService, TodoPriority, TodoStatus };
 
 /**
  * A ticked service and its captured information.
@@ -19,8 +19,8 @@ export type { PaymentMethod, PaymentStatus, TaskService, TodoPriority, TodoStatu
  */
 export interface ITodoSubtask {
   service: TaskService;
-  /** Where this leg has got to — the same three values the task itself uses. */
-  status: TodoStatus;
+  /** Where this leg has got to — the three checklist values. */
+  status: SubtaskStatus;
   /**
    * @deprecated The boolean `status` replaced.
    *
@@ -33,6 +33,15 @@ export interface ITodoSubtask {
    */
   done?: boolean;
   fields: Array<{ key: string; value: string }>;
+}
+
+export interface ITaskInstallment {
+  _id?: Types.ObjectId | string;
+  amountMinor: number;
+  date: Date;
+  paymentMethod: PaymentMethod;
+  note?: string;
+  createdAt: Date;
 }
 
 export interface ITodo extends Document {
@@ -54,8 +63,12 @@ export interface ITodo extends Document {
   featureImage?: string;
   /** The job's total cost, in integer minor units (paisa). See `src/lib/money.ts`. */
   paymentAmountMinor?: number;
-  /** Received against that total, in integer minor units. */
+  /** Initial payment / advance received, in integer minor units. */
+  initialPaymentMinor?: number;
+  /** Received against that total (initial + installments), in integer minor units. */
   paidAmountMinor?: number;
+  /** Subsequent payment installments recorded against this task. */
+  installments: ITaskInstallment[];
   /** @deprecated Pre-migration float column. Read via `readMinor`, never written. */
   paymentAmount?: number;
   paymentCurrency: string;
@@ -64,6 +77,35 @@ export interface ITodo extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const InstallmentSchema = new Schema<ITaskInstallment>(
+  {
+    amountMinor: {
+      type: Number,
+      required: true,
+      min: [1, "Installment amount must be greater than 0"],
+      validate: {
+        validator: Number.isInteger,
+        message: "Installment amount must be an integer number of minor units",
+      },
+    },
+    date: { type: Date, required: true, default: Date.now },
+    paymentMethod: {
+      type: String,
+      enum: {
+        values: PAYMENT_METHODS,
+        message: "Payment method must be one of: unset, cash, bkash, nagad, rocket, bank, other",
+      },
+      default: "cash",
+    },
+    note: {
+      type: String,
+      trim: true,
+      maxlength: [200, "Note cannot exceed 200 characters"],
+    },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
 
 /* `_id: false` because a sub-task is identified by its service, not by an id of
    its own — and the whole array is replaced on every write, so generated ids
@@ -94,7 +136,7 @@ const SubtaskSchema = new Schema<ITodoSubtask>(
     status: {
       type: String,
       enum: {
-        values: TODO_STATUSES,
+        values: SUBTASK_STATUSES,
         message: "Sub-task status must be one of: todo, in_progress, completed",
       },
       default: "todo",
@@ -128,7 +170,7 @@ const TodoSchema = new Schema<ITodo>(
       type: String,
       enum: {
         values: TODO_STATUSES,
-        message: "Status must be one of: todo, in_progress, completed",
+        message: "Status must be one of: todo, in_progress, completed, canceled",
       },
       default: "todo",
     },
@@ -179,6 +221,15 @@ const TodoSchema = new Schema<ITodo>(
       },
       default: undefined,
     },
+    initialPaymentMinor: {
+      type: Number,
+      min: [0, "Initial payment amount cannot be negative"],
+      validate: {
+        validator: Number.isInteger,
+        message: "Initial payment amount must be an integer number of minor units",
+      },
+      default: undefined,
+    },
     paidAmountMinor: {
       type: Number,
       min: [0, "Paid amount cannot be negative"],
@@ -187,6 +238,10 @@ const TodoSchema = new Schema<ITodo>(
         message: "Paid amount must be an integer number of minor units",
       },
       default: undefined,
+    },
+    installments: {
+      type: [InstallmentSchema],
+      default: [],
     },
     paymentAmount: { type: Number, default: undefined, select: true },
     paymentCurrency: {
@@ -218,7 +273,9 @@ const TodoSchema = new Schema<ITodo>(
 
 /* Every list query is scoped to a user and ordered or filtered from there, so
    the single-field `userId` index these replace could not serve the sort. */
+TodoSchema.index({ userId: 1, updatedAt: -1 });
 TodoSchema.index({ userId: 1, createdAt: -1 });
+TodoSchema.index({ userId: 1, status: 1, updatedAt: -1 });
 TodoSchema.index({ userId: 1, status: 1, createdAt: -1 });
 TodoSchema.index({ userId: 1, dueDate: 1 });
 /* Serves the "urgent work first" sort, which is the default triage view. */

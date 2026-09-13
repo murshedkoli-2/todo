@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { LedgerPersonWithBalance } from "@/lib/types";
+import { formatMoney } from "@/lib/money";
+import { personSettlement, settlementProgressLabel } from "@/lib/ledgerBalance";
 import AppShell from "@/components/shell/AppShell";
 import AddPersonModal from "@/components/AddPersonModal";
+import AddEntryModal from "@/components/ledger/AddEntryModal";
 import PersonDetailModal from "@/components/PersonDetailModal";
 import PageToolbar, { SortOption } from "@/components/ui/PageToolbar";
 import EmptyState from "@/components/ui/EmptyState";
@@ -63,6 +66,7 @@ function sortPersons(
 export default function LedgerClient({ initialPersons }: LedgerClientProps) {
   const [persons, setPersons] = useServerData<LedgerPersonWithBalance[]>(initialPersons);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddEntry, setShowAddEntry] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<LedgerPersonWithBalance | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
@@ -87,6 +91,21 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
   const handleAdd = (person: LedgerPersonWithBalance) =>
     setPersons((current) => [person, ...current]);
 
+  /**
+   * Folds back the row the quick add just changed.
+   *
+   * The server returns the person with their balance already settled, so the
+   * list redraws from that rather than refetching the book — and an entry
+   * against somebody new prepends a row instead of silently doing nothing,
+   * which is what a straight `map` would do for a person not in `persons` yet.
+   */
+  const handleEntrySaved = (person: LedgerPersonWithBalance, personCreated: boolean) =>
+    setPersons((current) =>
+      personCreated
+        ? [person, ...current]
+        : current.map((existing) => (existing._id === person._id ? person : existing))
+    );
+
   const handlePersonUpdate = (updated: LedgerPersonWithBalance) => {
     setPersons((current) => current.map((p) => (p._id === updated._id ? updated : p)));
     setSelectedPerson((current) => (current?._id === updated._id ? updated : current));
@@ -109,14 +128,34 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
         sortValue={sortKey}
         onSortChange={(value) => setSortKey(value as SortKey)}
         actions={
-          <button
-            onClick={() => setShowAdd(true)}
-            className="btn-secondary flex-shrink-0"
-            id="add-person-btn"
-          >
-            <PlusIcon className="w-4 h-4" />
-            Add person
-          </button>
+          <>
+            {/*
+              Two buttons, and the entry is the primary one: adding a person on
+              their own leaves a row reading ৳0 that says nothing, while nearly
+              every visit here is somebody writing down money that has just
+              moved. The person gets created along the way when they are new.
+            */}
+            <button
+              onClick={() => setShowAddEntry(true)}
+              className="btn-primary flex-shrink-0"
+              id="add-entry-btn"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add entry
+            </button>
+            {/* The label is on the button rather than in a second, screen-reader
+                -only span: `sr-only` text still contributes to the accessible
+                name, so the pair would announce "Add person Add person". */}
+            <button
+              onClick={() => setShowAdd(true)}
+              className="btn-secondary flex-shrink-0"
+              id="add-person-btn"
+              aria-label="Add person"
+            >
+              <UsersIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Add person</span>
+            </button>
+          </>
         }
       />
 
@@ -182,9 +221,9 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
           }
           action={
             persons.length === 0 ? (
-              <button onClick={() => setShowAdd(true)} className="btn-primary px-6">
+              <button onClick={() => setShowAddEntry(true)} className="btn-primary px-6">
                 <PlusIcon className="w-4 h-4" />
-                Add first person
+                Add first entry
               </button>
             ) : (
               <button onClick={() => setSearch("")} className="btn-outline">
@@ -205,6 +244,12 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
           {visiblePersons.map((person) => {
             const owed = person.balanceMinor >= 0;
             const tone = owed ? "green" : "red";
+            /* What is left of the loan, not just where the net stands — see
+               `lib/ledgerBalance.ts`. */
+            const settlement = personSettlement(person);
+            const progress = settlementProgressLabel(settlement, (minor) =>
+              formatMoney(minor, "BDT", { compact: true })
+            );
 
             return (
               <button
@@ -218,10 +263,33 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
                   <span className="block font-semibold text-sm truncate text-ink">
                     {person.name}
                   </span>
+                  {/* The repayment line replaces the note when there is one to
+                      show: on a row this dense, how much of the money has come
+                      back outranks the phone number kept beside the name. */}
                   <span className="block text-xs truncate text-ink-muted">
-                    {person.note ??
+                    {progress ??
+                      person.note ??
                       `${person.entryCount} entr${person.entryCount === 1 ? "y" : "ies"}`}
                   </span>
+
+                  {/* `block` because `.progress-track` is written for a div and
+                      these are spans — this label column sits inside a button,
+                      where a div is invalid. */}
+                  {progress && (
+                    <span
+                      className="progress-track block mt-1.5 max-w-[11rem]"
+                      role="img"
+                      aria-label={progress}
+                    >
+                      <span
+                        className="progress-fill block"
+                        style={{
+                          width: `${settlement.paidRatio * 100}%`,
+                          background: settlement.fullySettled ? "var(--green)" : undefined,
+                        }}
+                      />
+                    </span>
+                  )}
                 </span>
 
                 <span className="hidden sm:block w-28 text-right text-xs text-ink-muted">
@@ -231,7 +299,17 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
                 <span className="w-32 text-right">
                   <Money minor={person.balanceMinor} size="md" signed />
                   <span className="block text-[11px] mt-0.5 text-ink-muted">
-                    {owed ? "owes you" : "you owe"}
+                    {/* A person with no entries is not somebody who owes you
+                        nothing — they are somebody nothing has happened with,
+                        and "owes you" under a ৳0 is the row claiming a fact it
+                        does not have. */}
+                    {settlement.untouched
+                      ? "no entries"
+                      : settlement.fullySettled
+                        ? "cleared"
+                        : owed
+                          ? "owes you"
+                          : "you owe"}
                   </span>
                 </span>
 
@@ -243,6 +321,13 @@ export default function LedgerClient({ initialPersons }: LedgerClientProps) {
       )}
 
       {showAdd && <AddPersonModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />}
+      {showAddEntry && (
+        <AddEntryModal
+          persons={persons}
+          onClose={() => setShowAddEntry(false)}
+          onSaved={handleEntrySaved}
+        />
+      )}
       {selectedPerson && (
         <PersonDetailModal
           person={selectedPerson}

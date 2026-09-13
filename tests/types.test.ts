@@ -23,8 +23,10 @@ function todo(overrides: Partial<Todo>): Todo {
     images: [],
     featureImage: null,
     paymentAmountMinor: null,
+    initialPaymentMinor: null,
     paidAmountMinor: null,
     dueAmountMinor: null,
+    installments: [],
     paymentCurrency: "BDT",
     paymentMethod: "unset",
     paymentStatus: "unpaid",
@@ -50,6 +52,12 @@ describe("getDisplayStatus", () => {
       .toBe("completed");
   });
 
+  test("never marks canceled work overdue", () => {
+    // A canceled task is closed out; flagging it overdue is noise.
+    expect(getDisplayStatus(todo({ status: "canceled", dueDate: YESTERDAY })))
+      .toBe("canceled");
+  });
+
   test("a future due date does not change the status", () => {
     expect(getDisplayStatus(todo({ status: "todo", dueDate: TOMORROW }))).toBe("todo");
   });
@@ -57,7 +65,7 @@ describe("getDisplayStatus", () => {
 
 describe("display tables", () => {
   test("every display status has a label and an ink colour", () => {
-    for (const status of ["todo", "in_progress", "completed", "overdue"] as const) {
+    for (const status of ["todo", "in_progress", "completed", "canceled", "overdue"] as const) {
       expect(STATUS_LABELS[status]).toBeTruthy();
       // Ink variants exist because the vivid fills fail contrast on their own
       // pale tints; a missing entry would silently ship an unreadable label.
@@ -66,7 +74,7 @@ describe("display tables", () => {
   });
 
   test("the board only offers real, settable statuses", () => {
-    expect(BOARD_COLUMNS).toEqual(["todo", "in_progress", "completed"]);
+    expect(BOARD_COLUMNS).toEqual(["todo", "in_progress", "completed", "canceled"]);
     expect(BOARD_COLUMNS).not.toContain("overdue");
   });
 });

@@ -59,6 +59,7 @@ export default function TaskList({
         {todos.map((todo) => {
           const displayStatus = getDisplayStatus(todo);
           const isDone = todo.status === "completed";
+          const isCanceled = todo.status === "canceled";
           const isOverdue = displayStatus === "overdue";
           const pending = pendingIds.has(todo._id);
 
@@ -95,7 +96,13 @@ export default function TaskList({
               >
                 <span
                   className="block text-sm font-semibold truncate text-ink"
-                  style={isDone ? { textDecoration: "line-through", opacity: 0.55 } : undefined}
+                  style={
+                    isDone
+                      ? { textDecoration: "line-through", opacity: 0.55 }
+                      : isCanceled
+                        ? { textDecoration: "line-through", opacity: 0.5 }
+                        : undefined
+                  }
                 >
                   {todo.title}
                 </span>
@@ -154,7 +161,7 @@ export default function TaskList({
                   style={{ color: isOverdue ? "var(--red-ink)" : "var(--text-muted)" }}
                 >
                   <CalendarIcon className="w-3.5 h-3.5" />
-                  {formatDueLabel(todo.dueDate, { relative: !isDone })}
+                  {formatDueLabel(todo.dueDate, { relative: !isDone && !isCanceled })}
                 </span>
               )}
 

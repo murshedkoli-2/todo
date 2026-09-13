@@ -23,6 +23,7 @@ import PriorityFlag from "@/components/ui/PriorityFlag";
 import TaskCover from "@/components/ui/TaskCover";
 import SubtaskChecklist from "@/components/task/SubtaskChecklist";
 import type { SubtaskFields } from "@/components/task/SubtaskChecklist";
+import PaymentManager from "@/components/task/PaymentManager";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   EditIcon, TrashIcon, CalendarIcon, AlertIcon, CheckIcon, CloseIcon, SpinnerIcon,
@@ -32,7 +33,7 @@ interface TaskViewProps {
   todo: Todo;
 }
 
-const STATUS_OPTIONS: TodoStatus[] = ["todo", "in_progress", "completed"];
+const STATUS_OPTIONS: TodoStatus[] = ["todo", "in_progress", "completed", "canceled"];
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -62,7 +63,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
   const displayStatus: DisplayStatus = getDisplayStatus(todo);
   const statusColor = STATUS_COLORS[displayStatus];
   const showOverdue =
-    Boolean(todo.dueDate) && dueDayHasPassed(todo.dueDate!) && todo.status !== "completed";
+    Boolean(todo.dueDate) && dueDayHasPassed(todo.dueDate!) && todo.status !== "completed" && todo.status !== "canceled";
 
   useEffect(() => {
     if (!lightboxImage) return;
@@ -241,6 +242,16 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
               <span>Updated {formatDateTime(todo.updatedAt)}</span>
             </div>
           </section>
+
+          {/* Payment & Installment Management */}
+          <PaymentManager
+            todo={todo}
+            onUpdate={(updated) => {
+              setTodo(updated);
+              router.refresh();
+            }}
+            busy={deleting}
+          />
 
           {todo.subtasks.length > 0 && (
             <SubtaskChecklist
@@ -433,6 +444,17 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
                           </span>
                         )}
                       </div>
+
+                      {todo.installments && todo.installments.length > 0 && (
+                        <div className="flex items-baseline justify-between gap-3 mt-1">
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            Installments
+                          </span>
+                          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                            {todo.installments.length} recorded
+                          </span>
+                        </div>
+                      )}
 
                       {todo.dueAmountMinor != null && (
                         <div

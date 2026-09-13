@@ -107,10 +107,16 @@ describe("deriveStatusFromSubtasks", () => {
   test("never touches a task that has no sub-tasks", () => {
     // Ordinary work that is not one of the standing services keeps a status the
     // operator owns outright.
-    const statuses: TodoStatus[] = ["todo", "in_progress", "completed"];
+    const statuses: TodoStatus[] = ["todo", "in_progress", "completed", "canceled"];
     for (const status of statuses) {
       expect(deriveStatusFromSubtasks([], status)).toBeNull();
     }
+  });
+
+  test("never alters a canceled task even when legs change or all complete", () => {
+    expect(deriveStatusFromSubtasks(checklist(true, true), "canceled")).toBeNull();
+    expect(deriveStatusFromSubtasks(checklist(true, false), "canceled")).toBeNull();
+    expect(deriveStatusFromSubtasks(list("in_progress", "todo"), "canceled")).toBeNull();
   });
 
   test("is idempotent — applying the result again derives nothing further", () => {
