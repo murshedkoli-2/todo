@@ -22,6 +22,7 @@ import Breadcrumb from "@/components/ui/Breadcrumb";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import OptionCard from "@/components/ui/OptionCard";
 import SubtaskEditor from "@/components/task/SubtaskEditor";
+import TaskCover from "@/components/ui/TaskCover";
 import Stepper from "@/components/ui/wizard/Stepper";
 import WizardPanel from "@/components/ui/wizard/WizardPanel";
 import WizardFooter from "@/components/ui/wizard/WizardFooter";
@@ -772,17 +773,23 @@ export default function TaskForm({ todo, initialTitle = "" }: TaskFormProps) {
                       </div>
                     )}
 
-                    {/*
-                      Always rendered: a task with no upload still gets a cover, and
-                      leaving that unsaid made the default look like a bug.
-                    */}
-                    <p className="text-xs leading-relaxed text-ink-muted">
-                      {featureImage
-                        ? "This cover is shown on the task card."
-                        : images.length > 0
-                          ? "Hover an image and choose “Set cover” to use it on the task card. Without one, the default cover is shown."
+                    <div className="flex flex-col gap-2 pt-2 border-t border-line">
+                      <span className="field-label">Cover Preview</span>
+                      <TaskCover
+                        src={featureImage || null}
+                        services={services}
+                        className="h-28 w-full rounded-control border border-line shadow-xs"
+                      />
+                      <p className="text-xs leading-relaxed text-ink-muted">
+                        {featureImage
+                          ? "Custom cover selected — this image will be shown on the task card."
+                          : services.length > 1
+                          ? `Default cover active — dynamically displaying your ${services.length} selected subtasks.`
+                          : services.length === 1
+                          ? "Default cover active — displaying the official service artwork."
                           : "No image attached — the task card will use the default cover."}
-                    </p>
+                      </p>
+                    </div>
 
                     <input
                       ref={fileInputRef}

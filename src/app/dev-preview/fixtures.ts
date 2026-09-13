@@ -1,5 +1,4 @@
-// TEMPORARY design-review fixtures. Deleted before commit.
-import type { Todo, WalletAccount, LedgerPersonWithBalance } from "@/lib/types";
+import type { Todo } from "@/lib/types";
 
 const iso = (d: string) => new Date(d).toISOString();
 
@@ -64,23 +63,3 @@ export const TODOS = [
 ] as unknown as Todo[];
 
 export const COUNTS = { todo: 2, in_progress: 1, completed: 1 };
-
-export const ACCOUNTS = [
-  { _id: "a1", userId: "u", name: "Cash drawer", accountType: "cash", balanceMinor: 1_250_00, txCount: 12, createdAt: iso("2026-01-01"), updatedAt: iso("2026-08-20") },
-  { _id: "a2", userId: "u", name: "bKash", accountType: "mobile_banking", balanceMinor: 8_430_50, provider: "bKash", accountNumber: "01711••••34", txCount: 34, createdAt: iso("2026-01-01"), updatedAt: iso("2026-08-24") },
-  { _id: "a3", userId: "u", name: "City Bank", accountType: "bank_account", balanceMinor: 142_900_00, accountNumber: "••••8891", txCount: 8, createdAt: iso("2026-01-01"), updatedAt: iso("2026-08-19") },
-] as unknown as WalletAccount[];
-
-const P = (_id: string, name: string, r: number, p: number, note?: string) => ({
-  _id, userId: "u", name, note,
-  balanceMinor: r - p, totalReceivableMinor: r, totalPayableMinor: p,
-  lastEntryDate: iso("2026-08-20"), entryCount: 4,
-  createdAt: iso("2026-01-01"), updatedAt: iso("2026-08-20"),
-});
-
-export const PERSONS = [
-  P("1", "Rahim Uddin", 1_000_000, 400_000, "Neighbour"),
-  P("2", "Karim", 20_000, 120_050, "the tailor"),
-  P("3", "Ayesha Begum", 500_00, 500_00),
-  P("4", "Abdur Rahman", 78_900, 0),
-] as unknown as LedgerPersonWithBalance[];

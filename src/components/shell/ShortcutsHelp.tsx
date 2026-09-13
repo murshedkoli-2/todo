@@ -35,8 +35,6 @@ export const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
     items: [
       { keys: ["G", "O"], description: "Overview" },
       { keys: ["G", "T"], description: "Tasks" },
-      { keys: ["G", "L"], description: "Ledger" },
-      { keys: ["G", "W"], description: "Wallet" },
     ],
   },
 ];

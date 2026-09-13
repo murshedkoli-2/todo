@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Todo, SubtaskStatus, TaskService, getDisplayStatus, STATUS_LABELS, DisplayStatus,
-  PRIORITY_RANK, formatServices, describeSubtaskFields,
+  PRIORITY_RANK, formatServices, describeSubtaskFields, TASK_SERVICES, SERVICE_LABELS,
+  SERVICE_SHORT_LABELS, PAYMENT_STATUS_LABELS,
 } from "@/lib/types";
 import { redactSecrets } from "@/lib/subtasks";
 import { tallyByStatus } from "@/lib/taskInsights";
@@ -14,6 +15,7 @@ import AppShell from "@/components/shell/AppShell";
 import TodoCard from "@/components/TodoCard";
 import TaskBoard from "@/components/TaskBoard";
 import TaskList from "@/components/TaskList";
+import TaskDrawer from "@/components/task/TaskDrawer";
 import QuickAddBar, { QuickAddHandle } from "@/components/QuickAddBar";
 import PageToolbar, { SortOption } from "@/components/ui/PageToolbar";
 import SegmentedToggle, { Segment } from "@/components/ui/SegmentedToggle";
@@ -22,7 +24,10 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useServerData } from "@/hooks/useServerData";
-import { TasksIcon, CheckIcon, PlusIcon, GridIcon, BoardIcon, ListIcon } from "@/components/ui/icons";
+import {
+  TasksIcon, CheckIcon, PlusIcon, GridIcon, BoardIcon, ListIcon,
+  ChevronDownIcon, CloseIcon,
+} from "@/components/ui/icons";
 
 interface TasksClientProps {
   initialTodos: Todo[];
@@ -125,6 +130,9 @@ function sortTodos(todos: Todo[], key: SortKey): Todo[] {
   }
 }
 
+type DensityMode = "comfortable" | "compact";
+const isDensityMode = (v: string): v is DensityMode => v === "comfortable" || v === "compact";
+
 export default function TasksClient({ initialTodos }: TasksClientProps) {
   const router = useRouter();
   const toast = useToast();
@@ -132,18 +140,56 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   const [todos, setTodos] = useServerData<Todo[]>(initialTodos);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisplayStatus>("all");
-  /* View and sort are preferences, not page state: they survive navigating to
-     a task and back. */
+  const [serviceFilter, setServiceFilter] = useState<"all" | TaskService>("all");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "unpaid" | "partial" | "paid">("all");
+  const [drawerTodo, setDrawerTodo] = useState<Todo | null>(null);
+
+  /* View, sort, and density are preferences that survive navigation */
   const [sortKey, setSortKey] = usePersistentState<SortKey>(
     "taskflow:tasks:sort", "recent", isSortKey
   );
   const [view, setView] = usePersistentState<ViewMode>(
     "taskflow:tasks:view", "list", isViewMode
   );
+  const [density, setDensity] = usePersistentState<DensityMode>(
+    "taskflow:tasks:density", "comfortable", isDensityMode
+  );
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
 
   const quickAddRef = useRef<QuickAddHandle>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const drawerTodoId = drawerTodo?._id;
+  useEffect(() => {
+    if (drawerTodoId) {
+      const current = todos.find((t) => t._id === drawerTodoId);
+      if (current) setDrawerTodo(current);
+    }
+  }, [todos, drawerTodoId]);
+
+  /* Listen to external command palette actions */
+  useEffect(() => {
+    const handleView = (e: Event) => {
+      const detail = (e as CustomEvent<ViewMode>).detail;
+      if (detail && isViewMode(detail)) setView(detail);
+    };
+    const handleDensity = (e: Event) => {
+      const detail = (e as CustomEvent<DensityMode>).detail;
+      if (detail && isDensityMode(detail)) setDensity(detail);
+    };
+    const handleFilter = (e: Event) => {
+      const detail = (e as CustomEvent<DisplayStatus | "all">).detail;
+      if (detail && FILTERS.includes(detail)) setStatusFilter(detail);
+    };
+    window.addEventListener("taskflow:view", handleView);
+    window.addEventListener("taskflow:density", handleDensity);
+    window.addEventListener("taskflow:filter", handleFilter);
+    return () => {
+      window.removeEventListener("taskflow:view", handleView);
+      window.removeEventListener("taskflow:density", handleDensity);
+      window.removeEventListener("taskflow:filter", handleFilter);
+    };
+  }, [setView, setDensity, setStatusFilter]);
 
   /*
    * `changeStatus` reads the task list through this rather than closing over
@@ -163,30 +209,42 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
     const query = search.trim().toLowerCase();
     const filtered = todos.filter((todo) => {
       const status = getDisplayStatus(todo);
-      // Completed and canceled work drops out of the default view so it only shows what is
-      // still open. Filter chips bring them back, and an active
-      // search spans everything so finished and canceled tasks stay findable.
       const matchesStatus =
         statusFilter === "all"
           ? Boolean(query) || (status !== "completed" && status !== "canceled")
           : status === statusFilter;
       const matchesSearch = !query || searchableText(todo).includes(query);
-      return matchesStatus && matchesSearch;
+      const matchesService = serviceFilter === "all" || todo.services.includes(serviceFilter);
+      const matchesPayment = paymentFilter === "all" || todo.paymentStatus === paymentFilter;
+      return matchesStatus && matchesSearch && matchesService && matchesPayment;
     });
     return sortTodos(filtered, sortKey);
-  }, [todos, search, statusFilter, sortKey]);
+  }, [todos, search, statusFilter, serviceFilter, paymentFilter, sortKey]);
 
   /* The board shows every column, so it must not have completed work filtered
-     out from under it — only search and the explicit filter apply. */
+     out from under it — only search, service, and payment filter apply. */
   const boardTodos = useMemo(() => {
     const query = search.trim().toLowerCase();
-    /* Same matcher as the list, so a query that finds a task in one view does
-       not come up empty in the other. */
-    return todos.filter((todo) => !query || searchableText(todo).includes(query));
-  }, [todos, search]);
+    return todos.filter((todo) => {
+      const matchesSearch = !query || searchableText(todo).includes(query);
+      const matchesService = serviceFilter === "all" || todo.services.includes(serviceFilter);
+      const matchesPayment = paymentFilter === "all" || todo.paymentStatus === paymentFilter;
+      return matchesSearch && matchesService && matchesPayment;
+    });
+  }, [todos, search, serviceFilter, paymentFilter]);
+
+  const hasActiveFilters =
+    serviceFilter !== "all" || paymentFilter !== "all" || (statusFilter !== "all" && view !== "board") || Boolean(search.trim());
+
+  const clearAllFilters = useCallback(() => {
+    setSearch("");
+    setStatusFilter("all");
+    setServiceFilter("all");
+    setPaymentFilter("all");
+  }, []);
 
   const allCaughtUp =
-    statusFilter === "all" && !search.trim() && visibleTodos.length === 0 && counts.completed > 0;
+    statusFilter === "all" && serviceFilter === "all" && paymentFilter === "all" && !search.trim() && visibleTodos.length === 0 && counts.completed > 0;
 
   const setPending = useCallback((id: string, pending: boolean) => {
     setPendingIds((current) => {
@@ -306,8 +364,8 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   );
 
   const openTask = useCallback(
-    (todo: Todo) => router.push(`/tasks/${todo._id}`),
-    [router]
+    (todo: Todo) => setDrawerTodo(todo),
+    []
   );
 
   useHotkeys(
@@ -362,34 +420,139 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
       />
 
       {/*
-        Status filter. The four stat cards used to carry this, which meant the
-        only way to filter was through a block of dashboard furniture the page
-        did not otherwise need. The overview owns the tallies now; what belongs
-        here is the control.
+        Status & multi-predicate filters.
       */}
-      {todos.length > 0 && view !== "board" && (
-        <div
-          className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1 mb-5"
-          role="group"
-          aria-label="Filter by status"
-        >
-          {FILTERS.map((filter) => {
-            const active = statusFilter === filter;
-            const count = filter === "all" ? todos.length : counts[filter];
-            return (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setStatusFilter(filter)}
-                className="chip"
-                data-active={active}
-                aria-pressed={active}
-              >
-                {filter === "all" ? "All" : STATUS_LABELS[filter]}
-                <span className="tabular-nums opacity-60">{count}</span>
-              </button>
-            );
-          })}
+      {todos.length > 0 && (
+        <div className="flex flex-col gap-2.5 mb-5">
+          {view !== "board" && (
+            <div
+              className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1"
+              role="group"
+              aria-label="Filter by status"
+            >
+              {FILTERS.map((filter) => {
+                const active = statusFilter === filter;
+                const count = filter === "all" ? todos.length : counts[filter];
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setStatusFilter(filter)}
+                    className="chip"
+                    data-active={active}
+                    aria-pressed={active}
+                  >
+                    {filter === "all" ? "All" : STATUS_LABELS[filter]}
+                    <span className="tabular-nums opacity-60">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Secondary filter selectors and density toggle */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-line/50">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Service filter */}
+              <div className="relative">
+                <select
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value as "all" | TaskService)}
+                  className="input-dark !h-8 !py-0 pl-2.5 pr-7 text-xs font-semibold rounded-control bg-surface border-line cursor-pointer appearance-none"
+                  aria-label="Filter by service"
+                >
+                  <option value="all">All Services</option>
+                  {TASK_SERVICES.map((s) => (
+                    <option key={s} value={s}>
+                      {SERVICE_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-ink-muted" />
+              </div>
+
+              {/* Payment filter */}
+              <div className="relative">
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value as "all" | "unpaid" | "partial" | "paid")}
+                  className="input-dark !h-8 !py-0 pl-2.5 pr-7 text-xs font-semibold rounded-control bg-surface border-line cursor-pointer appearance-none"
+                  aria-label="Filter by payment"
+                >
+                  <option value="all">All Payments</option>
+                  <option value="unpaid">{PAYMENT_STATUS_LABELS.unpaid}</option>
+                  <option value="partial">{PAYMENT_STATUS_LABELS.partial}</option>
+                  <option value="paid">{PAYMENT_STATUS_LABELS.paid}</option>
+                </select>
+                <ChevronDownIcon className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-ink-muted" />
+              </div>
+
+              {/* Active filter badges and Clear all */}
+              {hasActiveFilters && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {serviceFilter !== "all" && (
+                    <span className="pill text-xs gap-1 bg-accent-soft text-accent-ink font-semibold">
+                      Service: {SERVICE_SHORT_LABELS[serviceFilter]}
+                      <button
+                        type="button"
+                        onClick={() => setServiceFilter("all")}
+                        className="hover:opacity-75 focus:outline-none"
+                        aria-label="Remove service filter"
+                      >
+                        <CloseIcon className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {paymentFilter !== "all" && (
+                    <span className="pill text-xs gap-1 bg-yellow-soft text-yellow-ink font-semibold">
+                      Payment: {PAYMENT_STATUS_LABELS[paymentFilter]}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentFilter("all")}
+                        className="hover:opacity-75 focus:outline-none"
+                        aria-label="Remove payment filter"
+                      >
+                        <CloseIcon className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-xs text-accent font-semibold hover:underline px-1 py-0.5"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Density toggle */}
+            {view !== "board" && (
+              <div className="flex items-center gap-1 bg-sunken p-0.5 rounded-control flex-shrink-0 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setDensity("comfortable")}
+                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
+                    density === "comfortable" ? "bg-surface shadow-xs text-ink" : "text-ink-muted hover:text-ink"
+                  }`}
+                  aria-pressed={density === "comfortable"}
+                >
+                  Cozy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDensity("compact")}
+                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
+                    density === "compact" ? "bg-surface shadow-xs text-ink" : "text-ink-muted hover:text-ink"
+                  }`}
+                  aria-pressed={density === "compact"}
+                >
+                  Compact
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -492,9 +655,16 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           onStatusChange={handleStatusChange}
           onSubtaskStatusChange={setSubtaskStatus}
           pendingIds={pendingIds}
+          density={density}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5 animate-stagger">
+        <div
+          className={`grid gap-4 sm:gap-5 animate-stagger ${
+            density === "compact"
+              ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+              : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          }`}
+        >
           {visibleTodos.map((todo, index) => (
             <div
               key={todo._id}
@@ -513,6 +683,15 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
           ))}
         </div>
       )}
+
+      <TaskDrawer
+        todo={drawerTodo}
+        open={drawerTodo !== null}
+        onClose={() => setDrawerTodo(null)}
+        onStatusChange={handleStatusChange}
+        onSubtaskStatusChange={setSubtaskStatus}
+        onEdit={(item) => router.push(`/tasks/${item._id}/edit`)}
+      />
     </AppShell>
   );
 }

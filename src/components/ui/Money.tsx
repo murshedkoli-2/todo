@@ -57,7 +57,7 @@ export default function Money({
 
   return (
     <span
-      className={`money ${SIZE_CLASS[size]} ${toneClass(tone, minor)} ${className}`.trim()}
+      className={`money tabular-nums font-mono ${SIZE_CLASS[size]} ${toneClass(tone, minor)} ${className}`.trim()}
     >
       {text}
     </span>

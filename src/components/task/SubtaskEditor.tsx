@@ -9,6 +9,7 @@ import {
 import SubtaskFieldInput from "@/components/task/SubtaskFieldInput";
 import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
 import { CheckIcon } from "@/components/ui/icons";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 
 interface SubtaskEditorProps {
   /** One row per ticked service, already in catalogue order. */
@@ -92,6 +93,18 @@ export default function SubtaskEditor({
                   {active && <CheckIcon className="w-2.5 h-2.5" />}
                 </span>
 
+                {/* Service Icon tile */}
+                <span
+                  className="w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center transition-colors"
+                  style={{
+                    background: `color-mix(in srgb, ${color} ${active ? "20%" : "10%"}, transparent)`,
+                    color: active ? SERVICE_TEXT_COLORS[service] : "var(--text-secondary)",
+                  }}
+                  aria-hidden="true"
+                >
+                  <ServiceIcon service={service} className="w-3.5 h-3.5" />
+                </span>
+
                 <span className="min-w-0">
                   <span
                     id={`service-${service}-label`}
@@ -157,20 +170,33 @@ function SubtaskCard({ subtask, index, onFieldChange, onStatusChange }: SubtaskC
       style={{ borderLeft: `3px solid ${color}` }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3
-            id={`subtask-${service}-heading`}
-            className="text-[13px] font-bold leading-tight"
-            style={{ color: SERVICE_TEXT_COLORS[service] }}
+        <div className="min-w-0 flex items-start gap-2.5">
+          <div
+            className="w-7 h-7 rounded-md flex-shrink-0 flex items-center justify-center border shadow-xs mt-0.5"
+            style={{
+              background: `color-mix(in srgb, ${color} 14%, transparent)`,
+              borderColor: `color-mix(in srgb, ${color} 28%, transparent)`,
+              color: SERVICE_TEXT_COLORS[service],
+            }}
+            aria-hidden="true"
           >
-            <span className="text-ink-muted font-normal">{index + 1}. </span>
-            {SERVICE_LABELS[service]}
-          </h3>
-          <p className="text-[11px] mt-0.5 text-ink-muted">
-            {missing === 0
-              ? "Everything asked for has been filled in."
-              : `${missing} of ${definitions.length} still blank — you can save and come back.`}
-          </p>
+            <ServiceIcon service={service} className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <h3
+              id={`subtask-${service}-heading`}
+              className="text-[13px] font-bold leading-tight"
+              style={{ color: SERVICE_TEXT_COLORS[service] }}
+            >
+              <span className="text-ink-muted font-normal">{index + 1}. </span>
+              {SERVICE_LABELS[service]}
+            </h3>
+            <p className="text-[11px] mt-0.5 text-ink-muted">
+              {missing === 0
+                ? "Everything asked for has been filled in."
+                : `${missing} of ${definitions.length} still blank — you can save and come back.`}
+            </p>
+          </div>
         </div>
 
         {/* Where this leg stands, settable while the task is still being

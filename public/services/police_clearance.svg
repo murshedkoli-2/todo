@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad_police_clearance" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3d1806" />
+      <stop offset="60%" stop-color="#78350f" />
+      <stop offset="100%" stop-color="#3d1806" />
+    </linearGradient>
+
+    <!-- Ambient Radial Glow -->
+    <radialGradient id="radialGlow_police_clearance" cx="75%" cy="30%" r="55%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Glassmorphism Badge Gradient -->
+    <linearGradient id="badgeGrad_police_clearance" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
+    </linearGradient>
+
+    <linearGradient id="badgeBorder_police_clearance" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Dot Lattice Pattern -->
+    <pattern id="dots_police_clearance" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#ffffff" fill-opacity="0.06" />
+    </pattern>
+  </defs>
+
+  <!-- Base background -->
+  <rect width="1200" height="630" fill="url(#bgGrad_police_clearance)" />
+  <rect width="1200" height="630" fill="url(#radialGlow_police_clearance)" />
+  <rect width="1200" height="630" fill="url(#dots_police_clearance)" />
+
+  <!-- Geometric Security Guilloche Curves -->
+  <g opacity="0.12" stroke="#f97316" fill="none" stroke-width="1.2">
+    <ellipse cx="900" cy="315" rx="420" ry="240" transform="rotate(-15 900 315)" />
+    <ellipse cx="900" cy="315" rx="380" ry="210" transform="rotate(-10 900 315)" />
+    <ellipse cx="900" cy="315" rx="340" ry="180" transform="rotate(-5 900 315)" />
+    <ellipse cx="900" cy="315" rx="300" ry="150" />
+    <ellipse cx="900" cy="315" rx="260" ry="120" transform="rotate(5 900 315)" />
+    <ellipse cx="900" cy="315" rx="220" ry="90" transform="rotate(10 900 315)" />
+  </g>
+
+  <!-- Large Watermark Icon in background right -->
+  <g transform="translate(820, 155) scale(6.6)" opacity="0.08" stroke="#f97316" fill="none">
+    <path d="M24 6s14 4.5 14 15.5c0 10.5-7.5 18.5-14 20.5-6.5-2-14-10-14-20.5C10 10.5 24 6 24 6z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18 23l4.5 4.5 8.5-9" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Left Content Panel / Glassmorphic Showcase -->
+  <g transform="translate(100, 140)">
+    <!-- Service Category Tag -->
+    <rect x="0" y="0" width="260" height="36" rx="18" fill="#f97316" fill-opacity="0.16" stroke="#f97316" stroke-opacity="0.35" stroke-width="1.2" />
+    <text x="24" y="23" fill="#f97316" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" letter-spacing="1.5" text-transform="uppercase">
+      Verification & Security
+    </text>
+
+    <!-- Main Service Title -->
+    <text x="0" y="95" fill="#ffffff" font-family="'Newsreader', Georgia, serif" font-size="52" font-weight="600" letter-spacing="-0.8">
+      Police Clearance
+    </text>
+
+    <!-- Official Service Badge Card -->
+    <g transform="translate(0, 135)">
+      <rect width="480" height="110" rx="18" fill="url(#badgeGrad_police_clearance)" stroke="url(#badgeBorder_police_clearance)" stroke-width="1.5" />
+      
+      <!-- Icon Container -->
+      <rect x="22" y="21" width="68" height="68" rx="14" fill="#f97316" fill-opacity="0.2" stroke="#f97316" stroke-opacity="0.5" stroke-width="1.5" />
+      <g transform="translate(32, 31) scale(1)" stroke="#f97316" fill="none">
+        <path d="M24 6s14 4.5 14 15.5c0 10.5-7.5 18.5-14 20.5-6.5-2-14-10-14-20.5C10 10.5 24 6 24 6z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18 23l4.5 4.5 8.5-9" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+
+      <!-- Badge Text -->
+      <text x="108" y="50" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600">
+        Standard Desk Service
+      </text>
+      <text x="108" y="74" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-size="14">
+        Official workflow &amp; document tracking
+      </text>
+    </g>
+  </g>
+
+  <!-- Bottom Accent Strip -->
+  <rect x="0" y="622" width="1200" height="8" fill="#f97316" opacity="0.8" />
+</svg>

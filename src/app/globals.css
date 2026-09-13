@@ -631,10 +631,10 @@ html:not(.light) .input-dark[type="date"] { color-scheme: dark; }
 }
 .card-tile:hover {
   transform: translateY(-3px);
-  border-color: var(--border-hover);
-  box-shadow: var(--shadow-card-hover), var(--surface-highlight);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-hover));
+  box-shadow: var(--shadow-card-hover), 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), var(--surface-highlight);
 }
-.card-tile:active { transform: translateY(-1px); }
+.card-tile:active { transform: translateY(-1px) scale(0.995); }
 
 /*
  * The headline card in a row of statistics. Carries the same soft brand wash

@@ -10,48 +10,31 @@ import StatCard from "@/components/ui/StatCard";
 import TodoCard from "@/components/TodoCard";
 import Money from "@/components/ui/Money";
 import EmptyState from "@/components/ui/EmptyState";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import { useToast } from "@/components/ui/ToastProvider";
 import { api, errorMessage } from "@/lib/apiClient";
 import { useServerData } from "@/hooks/useServerData";
 import { isPastDue } from "@/lib/dueDate";
-import type { Todo, WalletAccount, LedgerPersonWithBalance } from "@/lib/types";
+import type { Todo, TaskService } from "@/lib/types";
+import { SERVICE_LABELS, SERVICE_SHORT_LABELS, SERVICE_COLORS } from "@/lib/types";
 import type { CreateTodoInput, TodoStatus } from "@/lib/schemas/todo";
 import {
   TasksIcon,
-  LedgerIcon,
-  WalletIcon,
   AlertIcon,
   CheckIcon,
   PlusIcon,
   ChevronRightIcon,
   CashIcon,
-  PhoneIcon,
-  BankIcon,
 } from "@/components/ui/icons";
 
 interface OverviewClientProps {
   initialTodos: Todo[];
   taskCounts: Record<string, number>;
-  initialAccounts: WalletAccount[];
-  initialPersons: LedgerPersonWithBalance[];
-}
-
-function accountIcon(type: string) {
-  switch (type) {
-    case "mobile_banking":
-      return <PhoneIcon className="w-4 h-4" />;
-    case "bank":
-      return <BankIcon className="w-4 h-4" />;
-    default:
-      return <CashIcon className="w-4 h-4" />;
-  }
 }
 
 export default function OverviewClient({
   initialTodos,
   taskCounts,
-  initialAccounts,
-  initialPersons,
 }: OverviewClientProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -64,36 +47,13 @@ export default function OverviewClient({
 
   const userName = session?.user?.name ? session.user.name.split(" ")[0] : "there";
 
-  // Financial aggregates
-  const totalNetWorthMinor = useMemo(
-    () => initialAccounts.reduce((sum, acc) => sum + acc.balanceMinor, 0),
-    [initialAccounts]
-  );
-
-  const totalReceivablesMinor = useMemo(
-    () => initialPersons.reduce((sum, p) => sum + p.totalReceivableMinor, 0),
-    [initialPersons]
-  );
-
-  const totalPayablesMinor = useMemo(
-    () => initialPersons.reduce((sum, p) => sum + p.totalPayableMinor, 0),
-    [initialPersons]
-  );
-
-  const netLedgerPositionMinor = totalReceivablesMinor - totalPayablesMinor;
-
   // Task tallies
   const todoCount = counts.todo ?? 0;
   const inProgressCount = counts.in_progress ?? 0;
   const completedCount = counts.completed ?? 0;
   const activeCount = todoCount + inProgressCount;
 
-  /*
-   * Every task still open, in the order the server sorted them. This was a
-   * six-item preview; the overview now carries the full working set as cards,
-   * so the page answers "what is on my plate" without a hop to /tasks.
-   * Completed work stays out — it is reported by the tally card above.
-   */
+  /* Every open task for prioritized cards */
   const activeTasks = useMemo(
     () => todos.filter((t) => t.status !== "completed" && t.status !== "canceled"),
     [todos]
@@ -104,6 +64,36 @@ export default function OverviewClient({
       (t) => t.status !== "completed" && t.status !== "canceled" && t.dueDate && isPastDue(t.dueDate)
     ).length;
   }, [todos]);
+
+  // Billing statistics from tasks
+  const billingStats = useMemo(() => {
+    let totalInvoiced = 0;
+    let totalPaid = 0;
+    for (const todo of todos) {
+      if (todo.paymentAmountMinor != null) {
+        totalInvoiced += todo.paymentAmountMinor;
+      }
+      if (todo.paidAmountMinor != null) {
+        totalPaid += todo.paidAmountMinor;
+      }
+    }
+    const totalDue = Math.max(0, totalInvoiced - totalPaid);
+    const percent = totalInvoiced > 0 ? Math.min(100, Math.round((totalPaid / totalInvoiced) * 100)) : 100;
+    return { totalInvoiced, totalPaid, totalDue, percent };
+  }, [todos]);
+
+  // Service distribution among active tasks
+  const serviceDistribution = useMemo(() => {
+    const countsMap = new Map<TaskService, number>();
+    for (const task of activeTasks) {
+      for (const s of task.services) {
+        countsMap.set(s, (countsMap.get(s) ?? 0) + 1);
+      }
+    }
+    return Array.from(countsMap.entries())
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [activeTasks]);
 
   // Quick task creation
   const handleQuickAdd = async (
@@ -129,12 +119,6 @@ export default function OverviewClient({
     }
   };
 
-  /*
-   * Any of the three states, not just the completed toggle the list row had:
-   * a card carries the full status menu, so the handler has to accept whatever
-   * it picks. The tallies are adjusted from the task's own previous status
-   * rather than recomputed, which keeps the header counts honest mid-flight.
-   */
   const changeTaskStatus = async (id: string, status: TodoStatus) => {
     const task = todos.find((t) => t._id === id);
     if (!task || task.status === status) return;
@@ -164,8 +148,6 @@ export default function OverviewClient({
             : "Task updated."
       );
     } catch (caught: unknown) {
-      // Restore both halves together — a rolled-back list beside adjusted
-      // counts would show a tally that no card on the page accounts for.
       setTodos(previousTodos);
       setCounts((curr) => ({
         ...curr,
@@ -189,7 +171,7 @@ export default function OverviewClient({
         <div>
           <h1 className="text-display">Hello, {userName}</h1>
           <p className="text-sm mt-1 text-ink-secondary">
-            Here is what is happening across your tasks, ledger, and accounts today.
+            Here is your task workflow, subtask progress, and active desk operations today.
           </p>
         </div>
 
@@ -198,9 +180,9 @@ export default function OverviewClient({
             <PlusIcon className="w-4 h-4" />
             <span>New task</span>
           </Link>
-          <Link href="/wallet" className="btn-ghost h-9 px-3 text-xs">
-            <WalletIcon className="w-4 h-4" />
-            <span>Wallet</span>
+          <Link href="/tasks" className="btn-ghost h-9 px-3 text-xs">
+            <TasksIcon className="w-4 h-4" />
+            <span>All tasks</span>
           </Link>
         </div>
       </div>
@@ -214,37 +196,14 @@ export default function OverviewClient({
       </div>
 
       {/* ── Top Metric Cards ────────────────────────────────────────────── */}
-      {/*
-        Five columns, and the headline takes two of them. Four equal cards gave
-        the day's net worth exactly as much room as the count of overdue tasks,
-        which is a layout with no opinion about what the page is for.
-      */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8 animate-stagger">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 animate-stagger">
         <StatCard
           feature
-          icon={<WalletIcon className="w-5 h-5" />}
-          label="Total Net Worth"
-          value={<Money minor={totalNetWorthMinor} size="hero" tone="neutral" />}
-          hint={`Across ${initialAccounts.length} active account${initialAccounts.length === 1 ? "" : "s"}`}
-          color="var(--accent)"
-          onClick={() => router.push("/wallet")}
-        />
-
-        <StatCard
-          icon={<LedgerIcon className="w-5 h-5" />}
-          label="Ledger Position"
-          value={<Money minor={netLedgerPositionMinor} size="lg" tone="auto" signed />}
-          hint={`+৳${(totalReceivablesMinor / 100).toLocaleString()} in · -৳${(totalPayablesMinor / 100).toLocaleString()} out`}
-          color={netLedgerPositionMinor >= 0 ? "var(--green)" : "var(--orange)"}
-          onClick={() => router.push("/ledger")}
-        />
-
-        <StatCard
           icon={<TasksIcon className="w-5 h-5" />}
           label="Active Tasks"
           value={<span className="text-2xl font-bold text-ink">{activeCount}</span>}
-          hint={`${completedCount} completed recently`}
-          color="var(--purple)"
+          hint={`${todoCount} to-do · ${inProgressCount} in progress`}
+          color="var(--accent)"
           onClick={() => router.push("/tasks")}
         />
 
@@ -252,15 +211,33 @@ export default function OverviewClient({
           icon={<AlertIcon className="w-5 h-5" />}
           label="Attention Needed"
           value={<span className="text-2xl font-bold text-ink">{overdueCount}</span>}
-          hint={overdueCount > 0 ? `${overdueCount} overdue deadline${overdueCount === 1 ? "" : "s"}` : "All schedules on track"}
+          hint={overdueCount > 0 ? `${overdueCount} overdue deadline${overdueCount === 1 ? "" : "s"}` : "All deadlines on track"}
           color={overdueCount > 0 ? "var(--red)" : "var(--green)"}
+          onClick={() => router.push("/tasks")}
+        />
+
+        <StatCard
+          icon={<CheckIcon className="w-5 h-5" />}
+          label="Completed"
+          value={<span className="text-2xl font-bold text-ink">{completedCount}</span>}
+          hint="Finished workflow tasks"
+          color="var(--green)"
+          onClick={() => router.push("/tasks")}
+        />
+
+        <StatCard
+          icon={<CashIcon className="w-5 h-5" />}
+          label="Task Billings"
+          value={<Money minor={billingStats.totalInvoiced} size="lg" tone="neutral" />}
+          hint={`৳${(billingStats.totalPaid / 100).toLocaleString()} paid · ৳${(billingStats.totalDue / 100).toLocaleString()} due`}
+          color="var(--yellow)"
           onClick={() => router.push("/tasks")}
         />
       </div>
 
-      {/* ── Main Layout: Tasks + Financial Snapshot ──────────────────────── */}
+      {/* ── Main Layout: Tasks + Desk Operations ──────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Left 2 Cols: High Priority & Urgent Tasks ──────────────────── */}
+        {/* ── Left 2 Cols: Priorities & Up Next ──────────────────────────── */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <section className="panel">
             <div className="flex items-center justify-between mb-4">
@@ -292,13 +269,6 @@ export default function OverviewClient({
                 }
               />
             ) : (
-              /*
-               * The same card the tasks page grids, at the column width the
-               * overview has to spend: two across from `sm`, three once the
-               * viewport is wide enough that two would leave the cards
-               * stretched. Reusing TodoCard rather than restyling a row keeps
-               * one definition of what a task looks like.
-               */
               <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4 animate-stagger">
                 {activeTasks.map((task, index) => (
                   <div
@@ -320,98 +290,88 @@ export default function OverviewClient({
           </section>
         </div>
 
-        {/* ── Right Col: Financial Overview ──────────────────────────────── */}
+        {/* ── Right Col: Desk Services & Financial Status ──────────────────── */}
         <div className="flex flex-col gap-6">
-          {/* Accounts Summary */}
+          {/* Services Active */}
           <section className="panel">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-section">Accounts</h2>
-              <Link
-                href="/wallet"
-                className="text-xs font-semibold text-accent hover:underline flex items-center gap-1"
-              >
-                Manage
-                <ChevronRightIcon className="w-3.5 h-3.5" />
-              </Link>
+              <h2 className="text-section">Active Services</h2>
+              <span className="text-xs text-ink-muted">
+                {serviceDistribution.length} active catalogue
+              </span>
             </div>
 
-            {initialAccounts.length === 0 ? (
-              <p className="text-sm text-ink-muted py-2">No accounts registered yet.</p>
+            {serviceDistribution.length === 0 ? (
+              <p className="text-sm text-ink-muted py-2">No active service subtasks.</p>
             ) : (
-              <div className="flex flex-col gap-2.5">
-                {initialAccounts.slice(0, 5).map((account) => (
-                  <Link
-                    key={account._id}
-                    href="/wallet"
-                    className="p-3 rounded-card border border-line bg-card hover:border-border-hover transition-colors flex items-center justify-between gap-3"
+              <div className="flex flex-col gap-2">
+                {serviceDistribution.map(({ service, count }) => (
+                  <div
+                    key={service}
+                    className="p-2.5 rounded-card border border-line bg-card flex items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
                         className="w-7 h-7 rounded-well flex items-center justify-center flex-shrink-0"
                         style={{
-                          background: `color-mix(in srgb, ${account.color || "var(--accent)"} 16%, transparent)`,
-                          color: account.color || "var(--accent)",
+                          background: `color-mix(in srgb, ${SERVICE_COLORS[service]} 16%, transparent)`,
+                          color: SERVICE_COLORS[service],
                         }}
                       >
-                        {accountIcon(account.accountType)}
+                        <ServiceIcon service={service} className="w-4 h-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink truncate">{account.name}</p>
-                        <p className="text-xs text-ink-muted capitalize">
-                          {account.provider || account.accountType.replace("_", " ")}
+                        <p className="text-sm font-semibold text-ink truncate">
+                          {SERVICE_LABELS[service]}
+                        </p>
+                        <p className="text-xs text-ink-muted">
+                          {SERVICE_SHORT_LABELS[service]}
                         </p>
                       </div>
                     </div>
 
-                    <Money minor={account.balanceMinor} size="sm" tone="neutral" />
-                  </Link>
+                    <span className="pill bg-sunken text-xs font-semibold px-2">
+                      {count} {count === 1 ? "task" : "tasks"}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
           </section>
 
-          {/* Ledger Counterparties */}
+          {/* Billing & Installments Overview */}
           <section className="panel">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-section">Top Counterparties</h2>
-              <Link
-                href="/ledger"
-                className="text-xs font-semibold text-accent hover:underline flex items-center gap-1"
-              >
-                View ledger
-                <ChevronRightIcon className="w-3.5 h-3.5" />
-              </Link>
+              <h2 className="text-section">Payment Collection</h2>
+              <span className="text-xs font-semibold text-accent">
+                {billingStats.percent}% paid
+              </span>
             </div>
 
-            {initialPersons.length === 0 ? (
-              <p className="text-sm text-ink-muted py-2">No ledger entries recorded.</p>
-            ) : (
-              <div className="flex flex-col divide-y divide-line">
-                {initialPersons.slice(0, 4).map((person) => {
-                  const net = person.totalReceivableMinor - person.totalPayableMinor;
-                  return (
-                    <Link
-                      key={person._id}
-                      href="/ledger"
-                      className="py-2.5 flex items-center justify-between gap-3 group hover:bg-hover-overlay rounded-well px-2 -mx-2 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink truncate group-hover:text-accent transition-colors">
-                          {person.name}
-                        </p>
-                        <p className="text-xs text-ink-muted">
-                          {person.entryCount} {person.entryCount === 1 ? "entry" : "entries"}
-                        </p>
-                      </div>
-
-                      <div className="text-right">
-                        <Money minor={net} size="sm" tone="auto" signed />
-                      </div>
-                    </Link>
-                  );
-                })}
+            <div className="flex flex-col gap-3">
+              {/* Progress bar */}
+              <div className="w-full bg-sunken rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-accent h-full rounded-full transition-all duration-500"
+                  style={{ width: `${billingStats.percent}%` }}
+                />
               </div>
-            )}
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line/50">
+                <div>
+                  <p className="text-xs text-ink-muted">Total Invoiced</p>
+                  <p className="text-sm font-bold text-ink mt-0.5">
+                    <Money minor={billingStats.totalInvoiced} size="sm" tone="neutral" />
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-ink-muted">Remaining Balance</p>
+                  <p className="text-sm font-bold text-yellow-ink mt-0.5">
+                    <Money minor={billingStats.totalDue} size="sm" tone="auto" />
+                  </p>
+                </div>
+              </div>
+            </div>
           </section>
         </div>
       </div>

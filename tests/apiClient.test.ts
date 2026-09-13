@@ -53,7 +53,7 @@ describe("api", () => {
       json: async () => ({ error: "Amount must be greater than zero", code: "bad_request" }),
     });
 
-    await expect(api("/api/wallet/1/tx", { method: "POST", body: {} }))
+    await expect(api("/api/todos", { method: "POST", body: {} }))
       .rejects.toThrow("Amount must be greater than zero");
   });
 

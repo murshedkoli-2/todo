@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import Todo from "@/models/Todo";
+import Todo, { type ITaskInstallment } from "@/models/Todo";
 import { toTodoDTO, type TodoDTO } from "@/lib/dto/todo";
 import { NotFoundError } from "@/lib/api/errors";
 import { derivePaymentStatus } from "@/lib/payment";
@@ -356,7 +356,7 @@ export async function addInstallment(
     createdAt: new Date(),
   };
 
-  task.installments.push(installment as any);
+  task.installments.push(installment as unknown as ITaskInstallment);
   if (task.initialPaymentMinor === undefined && initialMinor > 0) {
     task.initialPaymentMinor = initialMinor;
   }

@@ -194,6 +194,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
           */}
           <TaskCover
             src={todo.featureImage}
+            services={todo.services}
             sizes="(max-width: 1024px) 100vw, 60vw"
             priority
             className="h-40 sm:h-52 rounded-panel border border-line"

@@ -21,29 +21,15 @@ export {
 export type {
   DescribedField, SubtaskProgress, SubtaskStatus, TaskSubtask,
 } from "@/lib/subtasks";
-export type { EntryType } from "@/lib/schemas/ledger";
-export type { AccountType, TxType } from "@/lib/schemas/wallet";
 
 export type { TaskInstallmentDTO as TaskInstallment, TodoDTO as Todo } from "@/lib/dto/todo";
-export type {
-  LedgerPersonDTO as LedgerPerson,
-  LedgerEntryDTO as LedgerEntry,
-  LedgerEntryWithBalanceDTO as LedgerEntryWithBalance,
-  LedgerPersonWithBalanceDTO as LedgerPersonWithBalance,
-} from "@/lib/dto/ledger";
-export type {
-  WalletAccountDTO as WalletAccount,
-  WalletTxDTO as WalletTransaction,
-  WalletTxWithBalanceDTO as WalletTransactionWithBalance,
-} from "@/lib/dto/wallet";
 
 import { isPastDue } from "@/lib/dueDate";
 import type { TodoDTO } from "@/lib/dto/todo";
-import { TASK_SERVICES as SERVICE_CATALOGUE, TODO_STATUSES, SUBTASK_STATUSES } from "@/lib/schemas/todo";
+import { TASK_SERVICES as SERVICE_CATALOGUE, SUBTASK_STATUSES } from "@/lib/schemas/todo";
 import type {
   PaymentMethod, PaymentStatus, SubtaskStatus, TaskService, TodoPriority, TodoStatus,
 } from "@/lib/schemas/todo";
-import type { AccountType } from "@/lib/schemas/wallet";
 
 /** `overdue` is derived at render time, never stored. */
 export type DisplayStatus = TodoStatus | "overdue";
@@ -321,32 +307,3 @@ export const PAYMENT_STATUS_TEXT_COLORS: Record<PaymentStatus, string> = {
   partial: "var(--yellow-ink)",
   paid: "var(--green-ink)",
 };
-
-export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  cash: "Cash",
-  mobile_banking: "Mobile Banking",
-  bank_account: "Bank Account",
-};
-
-export const ACCOUNT_TYPE_COLORS: Record<AccountType, string> = {
-  cash: "var(--yellow)",
-  mobile_banking: "var(--purple)",
-  bank_account: "var(--accent)",
-};
-
-/**
- * The colour to print *on* a solid {@link ACCOUNT_TYPE_COLORS} fill.
- *
- * White clears AA on two of these three and fails badly on the yellow, so the
- * partner token is looked up rather than assumed — see the `--on-*` note in
- * `globals.css` and the guard in `tests/contrast.test.ts`.
- */
-export const ACCOUNT_TYPE_ON_COLORS: Record<AccountType, string> = {
-  cash: "var(--on-yellow)",
-  mobile_banking: "var(--on-purple)",
-  bank_account: "var(--on-accent)",
-};
-
-export const MOBILE_BANKING_PROVIDERS = [
-  "bKash", "Nagad", "Rocket", "Upay", "MyCash", "SureCash", "Other",
-] as const;

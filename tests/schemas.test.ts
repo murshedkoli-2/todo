@@ -3,10 +3,6 @@ import {
   createTodoSchema, imageUrl, installmentInputSchema, installmentParams, subtaskParams, subtaskPatchSchema,
   taskServiceList, TASK_SERVICES, todoListQuerySchema, updatePaymentSchema, updateTodoSchema,
 } from "@/lib/schemas/todo";
-import {
-  createEntrySchema, createPersonSchema, quickEntrySchema,
-} from "@/lib/schemas/ledger";
-import { createAccountSchema, createTxSchema } from "@/lib/schemas/wallet";
 import { registerSchema, resetPasswordSchema } from "@/lib/schemas/auth";
 import { positiveAmount } from "@/lib/schemas/common";
 
@@ -377,119 +373,6 @@ describe("todoListQuerySchema", () => {
       .toBe("new_passport");
     expect(todoListQuerySchema.safeParse({ service: "trade_licence" }).success)
       .toBe(false);
-  });
-});
-
-describe("ledger schemas", () => {
-  test("createPersonSchema converts the opening balance", () => {
-    const parsed = createPersonSchema.parse({ name: "Rahim", initialAmount: "250.50" });
-    expect(parsed.initialAmount).toBe(25050);
-    expect(parsed.initialType).toBe("receivable");
-  });
-
-  test("createEntrySchema rejects an unknown entry type", () => {
-    expect(createEntrySchema.safeParse({ type: "gift", amount: 5 }).success).toBe(false);
-  });
-
-  test("createEntrySchema rejects a zero amount", () => {
-    expect(createEntrySchema.safeParse({ type: "payable", amount: 0 }).success).toBe(false);
-  });
-
-  test("createEntrySchema parses a YYYY-MM-DD date input", () => {
-    const parsed = createEntrySchema.parse({
-      type: "receivable", amount: 1, date: "2026-03-01",
-    });
-    expect(parsed.date).toBeInstanceOf(Date);
-  });
-
-  test("quickEntrySchema accepts an entry naming an existing person by id", () => {
-    const parsed = quickEntrySchema.parse({
-      type: "receivable",
-      amount: "120.50",
-      personId: "507f1f77bcf86cd799439011",
-    });
-    expect(parsed.amount).toBe(12050);
-    expect(parsed.personId).toBe("507f1f77bcf86cd799439011");
-  });
-
-  test("quickEntrySchema accepts an entry naming a person who is not in the book", () => {
-    const parsed = quickEntrySchema.parse({
-      type: "payable",
-      amount: 40,
-      personName: "  Rahim  ",
-    });
-    // Trimmed by `requiredText`; the service collapses inner runs before it
-    // matches or writes, so both halves agree on what the name is.
-    expect(parsed.personName).toBe("Rahim");
-  });
-
-  test("quickEntrySchema rejects a body carrying both a person and a name", () => {
-    /* Two answers to "who" would leave the server picking a winner, and that
-       is exactly the case where the money lands on the wrong person. */
-    expect(
-      quickEntrySchema.safeParse({
-        type: "receivable",
-        amount: 10,
-        personId: "507f1f77bcf86cd799439011",
-        personName: "Rahim",
-      }).success
-    ).toBe(false);
-  });
-
-  test("quickEntrySchema rejects a body naming nobody at all", () => {
-    expect(quickEntrySchema.safeParse({ type: "receivable", amount: 10 }).success)
-      .toBe(false);
-  });
-
-  test("quickEntrySchema rejects a blank name, which would create a nameless row", () => {
-    expect(
-      quickEntrySchema.safeParse({ type: "receivable", amount: 10, personName: "   " }).success
-    ).toBe(false);
-  });
-
-  test("quickEntrySchema rejects a malformed person id", () => {
-    expect(
-      quickEntrySchema.safeParse({ type: "receivable", amount: 10, personId: "nope" }).success
-    ).toBe(false);
-  });
-
-  test("quickEntrySchema keeps the amount rules it inherits", () => {
-    expect(
-      quickEntrySchema.safeParse({ type: "receivable", amount: 0, personName: "Rahim" }).success
-    ).toBe(false);
-  });
-
-  test("createEntrySchema rejects an unparseable date", () => {
-    expect(
-      createEntrySchema.safeParse({ type: "receivable", amount: 1, date: "yesterday" }).success
-    ).toBe(false);
-  });
-});
-
-describe("wallet schemas", () => {
-  test("createAccountSchema defaults the opening balance to zero", () => {
-    const parsed = createAccountSchema.parse({ name: "Cash", accountType: "cash" });
-    expect(parsed.initialBalance).toBe(0);
-  });
-
-  test("createAccountSchema allows a zero opening balance but not a negative one", () => {
-    expect(
-      createAccountSchema.safeParse({ name: "C", accountType: "cash", initialBalance: -5 }).success
-    ).toBe(false);
-  });
-
-  test("createAccountSchema rejects a malformed colour", () => {
-    expect(
-      createAccountSchema.safeParse({ name: "C", accountType: "cash", color: "red" }).success
-    ).toBe(false);
-    expect(
-      createAccountSchema.safeParse({ name: "C", accountType: "cash", color: "#4f5ee8" }).success
-    ).toBe(true);
-  });
-
-  test("createTxSchema requires a known direction", () => {
-    expect(createTxSchema.safeParse({ type: "refund", amount: 1 }).success).toBe(false);
-    expect(createTxSchema.parse({ type: "debit", amount: "3.50" }).amount).toBe(350);
   });
 });
 

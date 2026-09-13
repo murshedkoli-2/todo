@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Brand from "@/components/shell/Brand";
-import { TasksIcon, LedgerIcon, WalletIcon } from "@/components/ui/icons";
+import { TasksIcon, CheckIcon, CashIcon } from "@/components/ui/icons";
 
 interface AuthLayoutProps {
   title: string;
@@ -11,9 +11,9 @@ interface AuthLayoutProps {
 }
 
 const HIGHLIGHTS = [
-  { icon: <TasksIcon className="w-4 h-4" />,  label: "Tasks",  copy: "Plan work, track status, attach files" },
-  { icon: <LedgerIcon className="w-4 h-4" />, label: "Ledger", copy: "Know exactly who owes what" },
-  { icon: <WalletIcon className="w-4 h-4" />, label: "Wallet", copy: "Cash, mobile banking and bank balances" },
+  { icon: <TasksIcon className="w-4 h-4" />, label: "Tasks & Subtasks", copy: "Multi-service workflows, covers & checklist tracking" },
+  { icon: <CheckIcon className="w-4 h-4" />, label: "Instant Status", copy: "Live transitions across list, grid and board views" },
+  { icon: <CashIcon className="w-4 h-4" />, label: "Installments", copy: "Task pricing, payment tracking & installment schedules" },
 ];
 
 /**

@@ -14,6 +14,7 @@ import PriorityFlag from "@/components/ui/PriorityFlag";
 import Avatar from "@/components/ui/Avatar";
 import Money from "@/components/ui/Money";
 import TaskCover from "@/components/ui/TaskCover";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import { useMenu } from "@/hooks/useMenu";
 import {
   CalendarIcon, ClockIcon, ImageIcon, EditIcon, CheckIcon, MoreIcon, SpinnerIcon,
@@ -84,11 +85,11 @@ export default function TodoCard({
       aria-labelledby={`task-title-${todo._id}`}
     >
       {/*
-        Every card carries a cover, falling back to the shared default image
-        when the task has no upload, so the grid keeps a single card shape
-        instead of two.
+        Every card carries a cover, falling back to the service-based default cover
+        (or multi-service composite cover) when the task has no upload, so the grid
+        keeps a single card shape while visually communicating what jobs it covers.
       */}
-      <TaskCover src={todo.featureImage} className="h-32 flex-shrink-0" />
+      <TaskCover src={todo.featureImage} services={todo.services} className="h-32 flex-shrink-0" />
 
       <header
         className="flex items-center gap-2.5 px-4 h-11 flex-shrink-0 border-b border-line"
@@ -158,18 +159,17 @@ export default function TodoCard({
                 opacity: done ? 0.65 : undefined,
               };
 
-              /* One glyph per state, so the chip says where the leg is without
-                 being operated: nothing, a clock, a tick. */
-              const glyph =
-                status === "completed" ? <CheckIcon className="w-3 h-3" />
-                : status === "in_progress" ? <ClockIcon className="w-3 h-3" />
+              const stateGlyph =
+                status === "completed" ? <CheckIcon className="w-2.5 h-2.5 flex-shrink-0" />
+                : status === "in_progress" ? <ClockIcon className="w-2.5 h-2.5 flex-shrink-0" />
                 : null;
 
               if (!onSubtaskStatusChange) {
                 return (
-                  <span key={service} className="pill" style={chipStyle}>
-                    {glyph}
+                  <span key={service} className="pill gap-1" style={chipStyle}>
+                    <ServiceIcon service={service} className="w-3 h-3 flex-shrink-0" />
                     {SERVICE_SHORT_LABELS[service]}
+                    {stateGlyph}
                   </span>
                 );
               }
@@ -184,14 +184,19 @@ export default function TodoCard({
                      chip currently is — a cycling control that announces only
                      its state leaves the next step to guesswork. */
                   aria-label={`${SERVICE_LABELS[service]} on ${todo.title} is ${STATUS_LABELS[status]} — set to ${STATUS_LABELS[nextSubtaskStatus(status)]}`}
-                  className="pill transition-opacity duration-fast hover:!opacity-100 disabled:opacity-40"
+                  className="pill gap-1 transition-opacity duration-fast hover:!opacity-100 disabled:opacity-40"
                   style={chipStyle}
                   data-subtask={service}
                   data-status={status}
                   data-done={done}
                 >
-                  {ticking === service ? <SpinnerIcon className="w-3 h-3" /> : glyph}
+                  {ticking === service ? (
+                    <SpinnerIcon className="w-3 h-3 flex-shrink-0" />
+                  ) : (
+                    <ServiceIcon service={service} className="w-3 h-3 flex-shrink-0" />
+                  )}
                   {SERVICE_SHORT_LABELS[service]}
+                  {stateGlyph}
                 </button>
               );
             })}

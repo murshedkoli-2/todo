@@ -1,5 +1,5 @@
 import {
-  OverviewIcon, TasksIcon, LedgerIcon, WalletIcon,
+  OverviewIcon, TasksIcon,
 } from "@/components/ui/icons";
 
 export interface NavSection {
@@ -11,10 +11,8 @@ export interface NavSection {
 
 /** Single source of truth for the sidebar, mobile drawer, and bottom tab bar. */
 export const NAV_SECTIONS: NavSection[] = [
-  { href: "/",        label: "Overview", icon: OverviewIcon, description: "Everything at a glance" },
-  { href: "/tasks",   label: "Tasks",    icon: TasksIcon,    description: "Plan and track your work" },
-  { href: "/ledger",  label: "Ledger",   icon: LedgerIcon,   description: "Receivables and payables" },
-  { href: "/wallet",  label: "Wallet",   icon: WalletIcon,   description: "Cash, mobile and bank balances" },
+  { href: "/",      label: "Overview", icon: OverviewIcon, description: "Everything at a glance" },
+  { href: "/tasks", label: "Tasks",    icon: TasksIcon,    description: "Plan and track your work" },
 ];
 
 /**

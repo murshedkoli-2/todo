@@ -11,6 +11,7 @@ import type { TodoStatus } from "@/lib/schemas/todo";
 import Money from "@/components/ui/Money";
 import PriorityFlag from "@/components/ui/PriorityFlag";
 import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 import {
   CalendarIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, SpinnerIcon,
 } from "@/components/ui/icons";
@@ -25,6 +26,7 @@ interface TaskListProps {
   ) => Promise<void>;
   /** Ids with a status change in flight. */
   pendingIds: ReadonlySet<string>;
+  density?: "comfortable" | "compact";
 }
 
 /**
@@ -40,7 +42,7 @@ interface TaskListProps {
  * taken on almost every row is "this is done", and it should cost one click.
  */
 export default function TaskList({
-  todos, onView, onStatusChange, onSubtaskStatusChange, pendingIds,
+  todos, onView, onStatusChange, onSubtaskStatusChange, pendingIds, density = "comfortable",
 }: TaskListProps) {
   /* Expansion is per-row and additive — working through a morning's passport
      collections means keeping several open, not one at a time. */
@@ -67,7 +69,12 @@ export default function TaskList({
           const isExpanded = expanded.has(todo._id);
 
           return (
-            <li key={todo._id} className="statement-row !flex-col !items-stretch gap-0 px-4 sm:px-5 py-3">
+            <li
+              key={todo._id}
+              className={`statement-row !flex-col !items-stretch gap-0 transition-colors ${
+                density === "compact" ? "px-3 sm:px-4 py-2" : "px-4 sm:px-5 py-3"
+              }`}
+            >
              <div className="flex items-center gap-3">
               {/* Toggle, not a menu: a list is where work gets closed out. */}
               <button
@@ -265,15 +272,22 @@ function SubtaskRows({ id, todo, onStatusChange }: SubtaskRowsProps) {
             data-done={done}
             style={{ borderLeft: `3px solid ${color}` }}
           >
-            <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
-              <span
-                className="text-xs font-bold"
-                style={{
-                  color: SERVICE_TEXT_COLORS[service],
-                  textDecoration: done ? "line-through" : undefined,
-                }}
-              >
-                {SERVICE_LABELS[service]}
+            <span className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2">
+              <span className="inline-flex items-center gap-1.5">
+                <ServiceIcon
+                  service={service}
+                  className="w-3.5 h-3.5 flex-shrink-0"
+                  style={{ color: SERVICE_TEXT_COLORS[service] }}
+                />
+                <span
+                  className="text-xs font-bold"
+                  style={{
+                    color: SERVICE_TEXT_COLORS[service],
+                    textDecoration: done ? "line-through" : undefined,
+                  }}
+                >
+                  {SERVICE_LABELS[service]}
+                </span>
               </span>
               {/* One line of what was captured, so the row is identifiable
                   without opening the task — usually the document number. */}

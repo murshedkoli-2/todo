@@ -8,7 +8,8 @@ import { NAV_SECTIONS } from "@/components/shell/navigation";
 import { api } from "@/lib/apiClient";
 import type { Todo } from "@/lib/types";
 import {
-  KeyboardIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TasksIcon,
+  BoardIcon, GridIcon, KeyboardIcon, ListIcon, MoonIcon, PlusIcon, SearchIcon,
+  SunIcon, TasksIcon,
 } from "@/components/ui/icons";
 
 interface Command {
@@ -80,6 +81,104 @@ export default function CommandPalette() {
       run: () => router.push(section.href),
     }));
 
+    const viewActions: Command[] = [
+      {
+        id: "view-list",
+        label: "Switch to List view",
+        hint: "View",
+        icon: <ListIcon className="w-4 h-4" />,
+        run: () => {
+          try {
+            window.localStorage.setItem("taskflow:tasks:view", "list");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("taskflow:view", { detail: "list" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "view-grid",
+        label: "Switch to Grid view",
+        hint: "View",
+        icon: <GridIcon className="w-4 h-4" />,
+        run: () => {
+          try {
+            window.localStorage.setItem("taskflow:tasks:view", "grid");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("taskflow:view", { detail: "grid" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "view-board",
+        label: "Switch to Board view",
+        hint: "View",
+        icon: <BoardIcon className="w-4 h-4" />,
+        run: () => {
+          try {
+            window.localStorage.setItem("taskflow:tasks:view", "board");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("taskflow:view", { detail: "board" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "density-compact",
+        label: "Set density to Compact",
+        hint: "Density",
+        icon: <ListIcon className="w-4 h-4" />,
+        run: () => {
+          try {
+            window.localStorage.setItem("taskflow:tasks:density", "compact");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("taskflow:density", { detail: "compact" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "density-comfortable",
+        label: "Set density to Comfortable",
+        hint: "Density",
+        icon: <GridIcon className="w-4 h-4" />,
+        run: () => {
+          try {
+            window.localStorage.setItem("taskflow:tasks:density", "comfortable");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("taskflow:density", { detail: "comfortable" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "filter-in-progress",
+        label: "Filter: In Progress tasks",
+        hint: "Filter",
+        icon: <TasksIcon className="w-4 h-4" />,
+        run: () => {
+          window.dispatchEvent(new CustomEvent("taskflow:filter", { detail: "in_progress" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "filter-todo",
+        label: "Filter: To Do tasks",
+        hint: "Filter",
+        icon: <TasksIcon className="w-4 h-4" />,
+        run: () => {
+          window.dispatchEvent(new CustomEvent("taskflow:filter", { detail: "todo" }));
+          router.push("/tasks");
+        },
+      },
+      {
+        id: "filter-completed",
+        label: "Filter: Completed tasks",
+        hint: "Filter",
+        icon: <TasksIcon className="w-4 h-4" />,
+        run: () => {
+          window.dispatchEvent(new CustomEvent("taskflow:filter", { detail: "completed" }));
+          router.push("/tasks");
+        },
+      },
+    ];
+
     return [
       ...taskResults,
       {
@@ -89,6 +188,7 @@ export default function CommandPalette() {
         icon: <PlusIcon className="w-4 h-4" />,
         run: () => router.push("/tasks/new"),
       },
+      ...viewActions,
       ...navigation,
       {
         id: "toggle-theme",

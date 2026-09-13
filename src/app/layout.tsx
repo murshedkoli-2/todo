@@ -58,12 +58,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "TaskFlow — Personal Finance & Task Dashboard",
+  title: "TaskFlow — Smart Task & Service Workflow Suite",
   description:
-    "Manage tasks, track receivables and payables, and monitor cash, mobile banking and bank balances in one place.",
+    "Manage multi-service tasks, subtasks, document workflows, and client installment payments in one desktop-grade workspace.",
   keywords: [
-    "todo", "task manager", "productivity", "receivable", "payable",
-    "ledger", "wallet", "personal finance", "dark mode", "light mode",
+    "todo", "task manager", "productivity", "subtasks", "services",
+    "passport", "nid", "birth certificate", "installments", "workflow", "dark mode",
   ],
   authors: [{ name: "TaskFlow" }],
   robots: { index: true, follow: true },
@@ -82,15 +82,15 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, statusBarStyle: "default", title: "TaskFlow" },
 
   openGraph: {
-    title: "TaskFlow — Personal Finance & Task Dashboard",
-    description: "Manage tasks, ledger, and wallet in one place.",
+    title: "TaskFlow — Smart Task & Service Workflow Suite",
+    description: "Manage multi-service tasks, document workflows, and client installments in one workspace.",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: "TaskFlow — Personal Finance & Task Dashboard",
-    description: "Manage tasks, ledger, and wallet in one place.",
+    title: "TaskFlow — Smart Task & Service Workflow Suite",
+    description: "Manage multi-service tasks, document workflows, and client installments in one workspace.",
   },
 
   formatDetection: { telephone: false },

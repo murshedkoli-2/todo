@@ -113,10 +113,10 @@ describe("requestOrigin", () => {
     });
 
     const loginUrl = new URL("/login", requestOrigin(request) ?? "http://localhost:3000");
-    loginUrl.searchParams.set("callbackUrl", "/wallet");
+    loginUrl.searchParams.set("callbackUrl", "/tasks");
 
     expect(loginUrl.href).toBe(
-      "https://taskflow.example.com/login?callbackUrl=%2Fwallet"
+      "https://taskflow.example.com/login?callbackUrl=%2Ftasks"
     );
     expect(loginUrl.href).not.toContain("localhost");
   });

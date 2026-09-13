@@ -48,8 +48,6 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
         { keys: "c", handler: () => router.push("/tasks/new") },
         { keys: "g o", handler: () => router.push("/") },
         { keys: "g t", handler: () => router.push("/tasks") },
-        { keys: "g l", handler: () => router.push("/ledger") },
-        { keys: "g w", handler: () => router.push("/wallet") },
       ],
       [router]
     )

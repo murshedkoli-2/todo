@@ -13,6 +13,7 @@ import SubtaskStatusControl from "@/components/task/SubtaskStatusControl";
 import {
   CheckIcon, EditIcon, EyeIcon, EyeOffIcon, SpinnerIcon,
 } from "@/components/ui/icons";
+import ServiceIcon from "@/components/ui/ServiceIcon";
 
 /** Values for one sub-task, keyed by `ServiceFieldDef.key`. */
 export type SubtaskFields = Record<string, string>;
@@ -152,7 +153,21 @@ function SubtaskRow({
       data-done={done}
       style={{ borderLeft: `3px solid ${color}` }}
     >
-      <div className="min-w-0">
+      <div className="flex items-start gap-3">
+        {/* Service icon badge */}
+        <div
+          className="w-8 h-8 rounded-control flex-shrink-0 flex items-center justify-center border shadow-xs transition-colors mt-0.5"
+          style={{
+            background: `color-mix(in srgb, ${color} 14%, transparent)`,
+            borderColor: `color-mix(in srgb, ${color} 28%, transparent)`,
+            color: SERVICE_TEXT_COLORS[service],
+          }}
+          aria-hidden="true"
+        >
+          <ServiceIcon service={service} className="w-4 h-4" />
+        </div>
+
+        <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="min-w-0 flex flex-wrap items-baseline gap-x-2">
             <span
@@ -252,6 +267,7 @@ function SubtaskRow({
             </dl>
           )
         )}
+        </div>
       </div>
     </li>
   );
