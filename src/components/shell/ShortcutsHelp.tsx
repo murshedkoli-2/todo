@@ -17,7 +17,7 @@ export const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
   {
     title: "General",
     items: [
-      { keys: ["⌘", "K"], description: "Open the command palette" },
+      { keys: ["MOD", "K"], description: "Open the command palette" },
       { keys: ["/"], description: "Search the current page" },
       { keys: ["?"], description: "Show this help" },
       { keys: ["Esc"], description: "Close a dialog or clear a field" },
@@ -47,7 +47,12 @@ export const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
  */
 export default function ShortcutsHelp() {
   const [open, setOpen] = useState(false);
+  const [isApplePlatform, setIsApplePlatform] = useState(false);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
+
+  useEffect(() => {
+    setIsApplePlatform(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -112,7 +117,7 @@ export default function ShortcutsHelp() {
                     <dt className="flex items-center gap-1 flex-shrink-0">
                       {item.keys.map((key) => (
                         <kbd key={key} className="kbd">
-                          {key}
+                          {key === "MOD" ? (isApplePlatform ? "⌘" : "Ctrl") : key}
                         </kbd>
                       ))}
                     </dt>

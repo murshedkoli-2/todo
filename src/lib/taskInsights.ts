@@ -8,15 +8,21 @@
  */
 
 import { getDisplayStatus } from "@/lib/types";
-import type { DisplayStatus, Todo } from "@/lib/types";
+import type { Todo } from "@/lib/types";
+import type { TodoStatus } from "@/lib/schemas/todo";
 
-export type StatusTally = Record<DisplayStatus, number>;
+export type StatusTally = Record<TodoStatus, number>;
 
-/** How many tasks sit in each displayed status, `overdue` included. */
+/** How many tasks sit in each real, settable workflow status. */
 export function tallyByStatus(todos: ReadonlyArray<Todo>): StatusTally {
-  const tally: StatusTally = { todo: 0, in_progress: 0, completed: 0, canceled: 0, overdue: 0 };
-  for (const todo of todos) tally[getDisplayStatus(todo)] += 1;
+  const tally: StatusTally = { todo: 0, in_progress: 0, completed: 0, canceled: 0 };
+  for (const todo of todos) tally[todo.status] += 1;
   return tally;
+}
+
+/** Overdue is a deadline condition, not a workflow status. */
+export function countOverdue(todos: ReadonlyArray<Todo>): number {
+  return todos.filter((todo) => getDisplayStatus(todo) === "overdue").length;
 }
 
 /**

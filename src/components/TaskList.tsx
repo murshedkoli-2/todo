@@ -172,17 +172,24 @@ export default function TaskList({
                 </span>
               )}
 
-              <span
-                className="hidden md:inline-flex items-center gap-1.5 flex-shrink-0 w-24"
-                style={{ color: STATUS_TEXT_COLORS[displayStatus] }}
-              >
+              <span className="hidden md:flex flex-col items-start gap-0.5 flex-shrink-0 w-28">
                 <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: STATUS_COLORS[displayStatus] }}
-                />
-                <span className="text-[11px] font-semibold uppercase tracking-wide truncate">
-                  {STATUS_LABELS[displayStatus]}
+                  className="inline-flex items-center gap-1.5"
+                  style={{ color: STATUS_TEXT_COLORS[todo.status] }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: STATUS_COLORS[todo.status] }}
+                  />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide truncate">
+                    {STATUS_LABELS[todo.status]}
+                  </span>
                 </span>
+                {isOverdue && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-red-ink">
+                    Overdue
+                  </span>
+                )}
               </span>
 
               {/*

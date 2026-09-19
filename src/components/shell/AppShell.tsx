@@ -21,10 +21,10 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-/** Sends the same ⌘K the palette listens for, so one path drives both. */
+/** Sends the same cross-platform modifier shortcut the palette listens for. */
 function openPalette() {
   window.dispatchEvent(
-    new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true })
+    new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true })
   );
 }
 
@@ -36,7 +36,12 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
   const router = useRouter();
   const { data: session } = useSession();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isApplePlatform, setIsApplePlatform] = useState(false);
   const drawerRef = useFocusTrap<HTMLDivElement>(drawerOpen);
+
+  useEffect(() => {
+    setIsApplePlatform(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
+  }, []);
 
   /* App-wide shortcuts. Page-specific ones (quick add, search) are bound by
      the page that owns the control, so a shortcut can never point at a widget
@@ -120,7 +125,7 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
 
           <div className="flex-1" />
 
-          {/* Discoverability for ⌘K — the shortcut alone is invisible. */}
+          {/* Discoverability for the command palette shortcut. */}
           <button
             onClick={openPalette}
             className="btn-outline hidden md:inline-flex h-10 gap-2 pr-2"
@@ -128,7 +133,7 @@ export default function AppShell({ workspace = "My Workspace", children }: AppSh
           >
             <SearchIcon className="w-4 h-4" />
             <span className="text-xs">Search</span>
-            <kbd className="kbd">⌘K</kbd>
+            <kbd className="kbd">{isApplePlatform ? "⌘K" : "Ctrl K"}</kbd>
           </button>
 
           <button

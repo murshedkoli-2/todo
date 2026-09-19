@@ -60,8 +60,9 @@ export default function TaskDrawer({
   if (!open || !todo) return null;
 
   const displayStatus = getDisplayStatus(todo);
-  const statusColor = STATUS_COLORS[displayStatus];
-  const statusInk = STATUS_TEXT_COLORS[displayStatus];
+  const isOverdue = displayStatus === "overdue";
+  const statusColor = STATUS_COLORS[todo.status];
+  const statusInk = STATUS_TEXT_COLORS[todo.status];
 
   const advanceSubtask = async (service: TaskService, status: SubtaskStatus) => {
     if (!onSubtaskStatusChange) return;
@@ -94,12 +95,14 @@ export default function TaskDrawer({
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ background: statusColor }}
             />
-            <span
-              className="text-xs font-bold uppercase tracking-wider truncate"
-              style={{ color: statusInk }}
-            >
-              {STATUS_LABELS[displayStatus]}
+            <span className="text-xs font-bold uppercase tracking-wider truncate" style={{ color: statusInk }}>
+              {STATUS_LABELS[todo.status]}
             </span>
+            {isOverdue && (
+              <span className="pill !px-2 !py-0.5 bg-red-soft text-red-ink text-[10px] font-bold uppercase tracking-wide">
+                Overdue
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1">
@@ -164,9 +167,10 @@ export default function TaskDrawer({
             )}
 
             {todo.dueDate && (
-              <div className="flex items-center gap-1.5 text-xs text-ink-secondary">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-secondary">
                 <CalendarIcon className="w-3.5 h-3.5 text-ink-muted" />
                 <span>Due {formatDueLabel(todo.dueDate)}</span>
+                {isOverdue && <span className="font-semibold text-red-ink">· overdue</span>}
               </div>
             )}
           </div>

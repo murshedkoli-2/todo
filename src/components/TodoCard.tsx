@@ -50,8 +50,8 @@ export default function TodoCard({
   const [ticking, setTicking] = useState<TaskService | null>(null);
 
   const displayStatus = getDisplayStatus(todo);
-  const statusColor = STATUS_COLORS[displayStatus];
-  const statusInk = STATUS_TEXT_COLORS[displayStatus];
+  const statusColor = STATUS_COLORS[todo.status];
+  const statusInk = STATUS_TEXT_COLORS[todo.status];
   const isOverdue = displayStatus === "overdue";
 
   const handleStatusChange = (nextStatus: TodoStatus) => {
@@ -108,7 +108,7 @@ export default function TodoCard({
           className="text-[11px] font-bold uppercase tracking-[0.08em] truncate"
           style={{ color: statusInk }}
         >
-          {STATUS_LABELS[displayStatus]}
+          {STATUS_LABELS[todo.status]}
         </span>
 
         <span className="flex-1" />

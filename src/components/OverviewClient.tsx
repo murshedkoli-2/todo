@@ -176,10 +176,6 @@ export default function OverviewClient({
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/tasks/new" className="btn-primary h-9 px-3.5 text-xs">
-            <PlusIcon className="w-4 h-4" />
-            <span>New task</span>
-          </Link>
           <Link href="/tasks" className="btn-ghost h-9 px-3 text-xs">
             <TasksIcon className="w-4 h-4" />
             <span>All tasks</span>

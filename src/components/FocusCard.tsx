@@ -37,6 +37,7 @@ function urgency(dueDate: string): { headline: string; tone: string } {
 export default function FocusCard({ todo, onOpen }: FocusCardProps) {
   const { headline, tone } = urgency(todo.dueDate!);
   const displayStatus = getDisplayStatus(todo);
+  const isOverdue = displayStatus === "overdue";
 
   return (
     <article
@@ -58,12 +59,13 @@ export default function FocusCard({ todo, onOpen }: FocusCardProps) {
         <span
           className="pill"
           style={{
-            background: `color-mix(in srgb, ${STATUS_COLORS[displayStatus]} 14%, transparent)`,
-            color: STATUS_TEXT_COLORS[displayStatus],
+            background: `color-mix(in srgb, ${STATUS_COLORS[todo.status]} 14%, transparent)`,
+            color: STATUS_TEXT_COLORS[todo.status],
           }}
         >
-          {STATUS_LABELS[displayStatus]}
+          {STATUS_LABELS[todo.status]}
         </span>
+        {isOverdue && <span className="pill bg-red-soft text-red-ink">Overdue</span>}
       </div>
 
       <p className="text-section mb-1" style={{ color: tone }}>

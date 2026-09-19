@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Todo, TodoStatus, DisplayStatus, getDisplayStatus,
+  Todo, TodoStatus,
   STATUS_LABELS, STATUS_COLORS, STATUS_TEXT_COLORS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS, PAYMENT_STATUS_TEXT_COLORS,
@@ -60,8 +60,7 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
-  const displayStatus: DisplayStatus = getDisplayStatus(todo);
-  const statusColor = STATUS_COLORS[displayStatus];
+  const statusColor = STATUS_COLORS[todo.status];
   const showOverdue =
     Boolean(todo.dueDate) && dueDayHasPassed(todo.dueDate!) && todo.status !== "completed" && todo.status !== "canceled";
 
@@ -206,12 +205,19 @@ export default function TaskView({ todo: initialTodo }: TaskViewProps) {
                 className="pill"
                 style={{
                   background: `color-mix(in srgb, ${statusColor} 14%, transparent)`,
-                  color: STATUS_TEXT_COLORS[displayStatus],
+                  color: STATUS_TEXT_COLORS[todo.status],
                 }}
               >
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusColor }} />
-                {showOverdue ? "Overdue" : STATUS_LABELS[displayStatus]}
+                {STATUS_LABELS[todo.status]}
               </span>
+
+              {showOverdue && (
+                <span className="pill bg-red-soft text-red-ink">
+                  <AlertIcon className="w-3.5 h-3.5" />
+                  Overdue
+                </span>
+              )}
 
               {todo.paymentAmountMinor != null && (
                 <span

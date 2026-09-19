@@ -14,10 +14,8 @@ interface StatCardProps {
   onClick?: () => void;
   active?: boolean;
   /**
-   * Marks this as the row's headline statistic: the card spans two grid
-   * columns and picks up `.card-tile.is-feature`, which carries the brand wash
-   * and establishes the inline-size container that `.money-hero` sizes itself
-   * against. A row should hold at most one.
+   * Marks this as the row's headline statistic: it picks up the brand wash and
+   * top accent while keeping the KPI row balanced at desktop widths.
    */
   feature?: boolean;
 }
@@ -32,10 +30,9 @@ export default function StatCard({
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      aria-pressed={onClick ? active : undefined}
       className={[
         "card-tile !p-4 sm:!p-5",
-        feature ? "is-feature col-span-2" : "",
+        feature ? "is-feature" : "",
         onClick ? "cursor-pointer" : "",
       ].filter(Boolean).join(" ")}
       style={{

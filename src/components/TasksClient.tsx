@@ -8,7 +8,7 @@ import {
   SERVICE_SHORT_LABELS, PAYMENT_STATUS_LABELS,
 } from "@/lib/types";
 import { redactSecrets } from "@/lib/subtasks";
-import { tallyByStatus } from "@/lib/taskInsights";
+import { countOverdue, tallyByStatus } from "@/lib/taskInsights";
 import type { TodoPriority, TodoStatus } from "@/lib/schemas/todo";
 import { api, errorMessage } from "@/lib/apiClient";
 import AppShell from "@/components/shell/AppShell";
@@ -204,6 +204,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
   }, [todos]);
 
   const counts = useMemo(() => tallyByStatus(todos), [todos]);
+  const overdueCount = useMemo(() => countOverdue(todos), [todos]);
 
   const visibleTodos = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -399,7 +400,7 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
         onSortChange={(value) => setSortKey(value as SortKey)}
         actions={
           <>
-            <div className="w-[228px] flex-shrink-0">
+            <div className="w-full sm:w-[228px] flex-shrink-0">
               <SegmentedToggle
                 segments={VIEW_SEGMENTS}
                 value={view}
@@ -432,7 +433,12 @@ export default function TasksClient({ initialTodos }: TasksClientProps) {
             >
               {FILTERS.map((filter) => {
                 const active = statusFilter === filter;
-                const count = filter === "all" ? todos.length : counts[filter];
+                const count =
+                  filter === "all"
+                    ? todos.length
+                    : filter === "overdue"
+                      ? overdueCount
+                      : counts[filter];
                 return (
                   <button
                     key={filter}
